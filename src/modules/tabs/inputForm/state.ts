@@ -47,6 +47,7 @@ interface MergeLastAuditParams {
   lastAudit: AuditRecord | null | undefined;
   cards: Card[];
   bankAccounts: BankAccount[];
+  financialConfig?: Partial<CatalystCashConfig> | null | undefined;
   today: Date;
 }
 
@@ -60,6 +61,41 @@ function formatFormDate(date: Date) {
 
 function formatFormTime(date: Date) {
   return date.toTimeString().slice(0, 5);
+}
+
+function bucketHasConcreteInvestmentSource(
+  config: Partial<CatalystCashConfig> | null | undefined,
+  bucket: "roth" | "brokerage" | "k401"
+) {
+  const livePlaidBucket = Array.isArray(config?.plaidInvestments)
+    && config.plaidInvestments.some(
+      (account) => account?.bucket === bucket && Number(account?._plaidBalance || 0) > 0
+    );
+  const hasManualHoldings = Boolean(config?.enableHoldings)
+    && Array.isArray(config?.holdings?.[bucket])
+    && config.holdings[bucket].length > 0;
+  return livePlaidBucket || hasManualHoldings;
+}
+
+export function suppressRedundantManualInvestmentSeeds(
+  form: InputFormState,
+  config: Partial<CatalystCashConfig> | null | undefined
+): InputFormState {
+  let changed = false;
+  const next = { ...form };
+  if (bucketHasConcreteInvestmentSource(config, "roth") && String(form.roth ?? "").trim() !== "") {
+    next.roth = "";
+    changed = true;
+  }
+  if (bucketHasConcreteInvestmentSource(config, "brokerage") && String(form.brokerage ?? "").trim() !== "") {
+    next.brokerage = "";
+    changed = true;
+  }
+  if (bucketHasConcreteInvestmentSource(config, "k401") && String(form.k401Balance ?? "").trim() !== "") {
+    next.k401Balance = "";
+    changed = true;
+  }
+  return changed ? next : form;
 }
 
 function normalizeLookupKey(value: unknown) {
@@ -196,7 +232,7 @@ export function createInitialInputFormState({
   plaidData: PlaidAutoFillData;
   config: Partial<CatalystCashConfig> | null | undefined;
 }): InputFormState {
-  return {
+  return suppressRedundantManualInvestmentSeeds({
     date: formatFormDate(today),
     time: formatFormTime(today),
     checking: plaidData.checking !== null ? plaidData.checking : "",
@@ -210,7 +246,7 @@ export function createInitialInputFormState({
     notes: "",
     autoPaycheckAdd: false,
     paycheckAddOverride: "",
-  } as InputFormState;
+  } as InputFormState, config);
 }
 
 export function buildCardSelectGroups(
@@ -303,6 +339,7 @@ export function mergeLastAuditIntoForm({
   lastAudit,
   cards,
   bankAccounts,
+  financialConfig,
   today,
 }: MergeLastAuditParams): InputFormState {
   if (!hasReusableAuditSeed(lastAudit)) return previousForm;
@@ -313,7 +350,7 @@ export function mergeLastAuditIntoForm({
   });
   const plaidNow = readPlaidAutoFill(cards, bankAccounts);
 
-  return {
+  return suppressRedundantManualInvestmentSeeds({
     ...previousForm,
     ...priorForm,
     debts: mergeDebtSnapshots({
@@ -330,7 +367,7 @@ export function mergeLastAuditIntoForm({
     k401Balance: toMoneyInput(priorForm.k401Balance ?? previousForm.k401Balance),
     autoPaycheckAdd: typeof priorForm.autoPaycheckAdd === "boolean" ? priorForm.autoPaycheckAdd : false,
     paycheckAddOverride: "",
-  } as InputFormState;
+  } as InputFormState, financialConfig);
 }
 
 export function getTypedFinancialConfig(financialConfig: CatalystCashConfig | null | undefined) {

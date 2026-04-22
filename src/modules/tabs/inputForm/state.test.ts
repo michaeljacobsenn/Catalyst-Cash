@@ -185,6 +185,19 @@ describe("input form state helpers", () => {
     expect(state.debts).toHaveLength(1);
   });
 
+  it("suppresses seeded manual investment values when a linked bucket is already live", () => {
+    const state = createInitialInputFormState({
+      today: new Date("2026-03-16T10:30:00Z"),
+      plaidData: { checking: 1000, vault: 500, debts: [] },
+      config: {
+        investmentRoth: 3000,
+        plaidInvestments: [{ id: "plaid-roth", bucket: "roth", _plaidBalance: 3250 }],
+      },
+    });
+
+    expect(state.roth).toBe("");
+  });
+
   it("mergePlaidAutoFillIntoForm respects manual overrides", () => {
     const result = mergePlaidAutoFillIntoForm(
       {
@@ -301,6 +314,37 @@ describe("input form state helpers", () => {
       { cardId: "card-1", name: "Visa", balance: 400 },
       { cardId: "", name: "Personal Loan", balance: "900" },
     ]);
+  });
+
+  it("mergeLastAuditIntoForm drops stale manual investment seeds when a linked investment bucket exists", () => {
+    const result = mergeLastAuditIntoForm({
+      previousForm: {
+        roth: "",
+        brokerage: "",
+        k401Balance: "",
+        date: "2026-03-01",
+        pendingCharges: [],
+        habitCount: 10,
+        debts: [],
+        notes: "",
+        autoPaycheckAdd: false,
+        paycheckAddOverride: "",
+      },
+      lastAudit: {
+        isTest: false,
+        form: {
+          roth: "6356.64",
+        },
+      },
+      cards: [],
+      bankAccounts: [],
+      financialConfig: {
+        plaidInvestments: [{ id: "plaid-roth", bucket: "roth", _plaidBalance: 6362.74 }],
+      },
+      today: new Date("2026-03-16T10:30:00Z"),
+    });
+
+    expect(result.roth).toBe("");
   });
 
   it("treats imported audits with date-only form snapshots as non-reusable seed data", () => {

@@ -74,6 +74,7 @@ export function CashAccountSection({
   }));
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
+  const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
 
   return (
     <Card
@@ -99,8 +100,8 @@ export function CashAccountSection({
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto",
-          alignItems: "start",
-          gap: 10,
+          alignItems: "center",
+          gap: 12,
           marginBottom: hasAccounts ? 8 : 6,
         }}
       >
@@ -108,13 +109,33 @@ export function CashAccountSection({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
             minWidth: 0,
-            flexWrap: "wrap",
-            width: "100%",
           }}
         >
-          <Label style={{ marginBottom: 0, fontWeight: 800 }}>{title}</Label>
+          <Label
+            style={{
+              marginBottom: 0,
+              fontWeight: 800,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {title}
+          </Label>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            justifyContent: "flex-end",
+            whiteSpace: "nowrap",
+          }}
+        >
           {visibleCount > 0 && (
             <Badge
               variant="outline"
@@ -123,6 +144,7 @@ export function CashAccountSection({
                 color: toneColor,
                 borderColor: `${toneColor}35`,
                 background: `${toneColor}10`,
+                flexShrink: 0,
               }}
             >
               {visibleCount} {visibleCount === 1 ? "ACCOUNT" : "ACCOUNTS"}
@@ -139,23 +161,15 @@ export function CashAccountSection({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
-              <Mono size={12.5} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
+              <Mono size={summaryMonoSize} weight={800} color={anyAccountOverridden ? toneColor : T.text.primary}>
                 {fmt(effectiveTotal)}
               </Mono>
             </div>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexShrink: 0,
-            justifyContent: "flex-end",
-          }}
-        >
           <SectionAddControl
             accent={toneColor}
             buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}

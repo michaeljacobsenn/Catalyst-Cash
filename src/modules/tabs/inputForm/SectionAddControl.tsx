@@ -73,24 +73,25 @@ export function SectionAddControl({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 6,
-          minWidth: 68,
-          minHeight: 32,
-          padding: "0 12px",
+          gap: 5,
+          minWidth: 62,
+          minHeight: 30,
+          padding: "0 10px",
           borderRadius: 999,
           border: `1px solid ${accent}40`,
           background: `${accent}12`,
           color: accent,
-          fontSize: 10,
+          fontSize: 9.5,
           fontWeight: 800,
           fontFamily: T.font.mono,
           letterSpacing: "0.04em",
           justifyContent: "center",
+          whiteSpace: "nowrap",
           boxShadow: "none",
           transition: "transform .2s ease, opacity .2s ease, background-color .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease",
         }}
       >
-        <Plus size={11} strokeWidth={2.8} />
+        <Plus size={10} strokeWidth={2.8} />
         ADD
       </button>
 

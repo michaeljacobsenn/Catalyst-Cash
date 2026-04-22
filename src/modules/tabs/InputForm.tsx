@@ -72,6 +72,7 @@ import {
     hasReusableAuditSeed,
     mergeLastAuditIntoForm,
     mergePlaidAutoFillIntoForm,
+    suppressRedundantManualInvestmentSeeds,
   } from "./inputForm/state";
   import {
     loadAuditQuota,
@@ -296,6 +297,10 @@ export default function InputForm({
   const [showConfig, setShowConfig] = useState<boolean>(false);
 
   useEffect(() => {
+    setForm((prev) => suppressRedundantManualInvestmentSeeds(prev, typedFinancialConfig));
+  }, [typedFinancialConfig.plaidInvestments, typedFinancialConfig.enableHoldings, typedFinancialConfig.holdings]);
+
+  useEffect(() => {
     void loadHoldingValues(financialConfig, setHoldingValues, setHoldingBreakdowns);
   }, [financialConfig?.enableHoldings, financialConfig?.holdings]);
 
@@ -425,6 +430,7 @@ export default function InputForm({
         lastAudit,
         cards,
         bankAccounts,
+        financialConfig: typedFinancialConfig,
         today: new Date(),
       })
     );
@@ -892,13 +898,7 @@ export default function InputForm({
               <CashAccountSection
                 meta={visibleCheckingAccountMeta}
                 toneColor={T.accent.emerald}
-                title={
-                  visibleCheckingAccountMeta.count > 1
-                    ? "Checking & Cash"
-                    : visibleCheckingAccountMeta.count === 1
-                      ? visibleCheckingAccountMeta.label
-                      : "Checking & Cash"
-                }
+                title="Checking & Cash"
                 accountOverrides={overridePlaid.cashAccounts}
                 onOverrideAccount={(id, value) =>
                   setOverridePlaid((p) => ({
@@ -935,13 +935,7 @@ export default function InputForm({
               <CashAccountSection
                 meta={visibleSavingsAccountMeta}
                 toneColor="#3B82F6"
-                title={
-                  visibleSavingsAccountMeta.count > 1
-                    ? "Savings & Vault"
-                    : visibleSavingsAccountMeta.count === 1
-                      ? visibleSavingsAccountMeta.label
-                      : "Savings & Vault"
-                }
+                title="Savings & Vault"
                 accountOverrides={overridePlaid.cashAccounts}
                 onOverrideAccount={(id, value) =>
                   setOverridePlaid((p) => ({

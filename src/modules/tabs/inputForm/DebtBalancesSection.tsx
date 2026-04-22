@@ -101,6 +101,7 @@ export function DebtBalancesSection({
   };
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
+  const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
 
   return (
     <Card
@@ -126,8 +127,8 @@ export function DebtBalancesSection({
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto",
-          alignItems: "start",
-          gap: 10,
+          alignItems: "center",
+          gap: 12,
           marginBottom: debts.length > 0 ? 8 : 6,
         }}
       >
@@ -135,13 +136,33 @@ export function DebtBalancesSection({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
             minWidth: 0,
-            flexWrap: "wrap",
-            width: "100%",
           }}
         >
-          <Label style={{ marginBottom: 0, fontWeight: 800 }}>Credit Card Balances</Label>
+          <Label
+            style={{
+              marginBottom: 0,
+              fontWeight: 800,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Credit Card Balances
+          </Label>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            justifyContent: "flex-end",
+            whiteSpace: "nowrap",
+          }}
+        >
           {debts.length > 0 && (
             <Badge
               variant="outline"
@@ -150,6 +171,7 @@ export function DebtBalancesSection({
                 color: T.status.red,
                 borderColor: `${T.status.red}35`,
                 background: `${T.status.red}10`,
+                flexShrink: 0,
               }}
             >
               {debts.length} {debts.length === 1 ? "CARD" : "CARDS"}
@@ -166,23 +188,15 @@ export function DebtBalancesSection({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
-              <Mono size={12.5} weight={800} color={T.status.red}>
+              <Mono size={summaryMonoSize} weight={800} color={T.status.red}>
                 {fmt(totalBalance)}
               </Mono>
             </div>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexShrink: 0,
-            justifyContent: "flex-end",
-          }}
-        >
           <SectionAddControl
             accent={T.status.red}
             buttonAriaLabel="Add card balance to audit"

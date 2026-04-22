@@ -71,6 +71,7 @@ export function InvestmentBalancesSection({
   };
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
+  const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
 
   return (
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
@@ -78,8 +79,8 @@ export function InvestmentBalancesSection({
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(0, 1fr) auto",
-          alignItems: "start",
-          gap: 10,
+          alignItems: "center",
+          gap: 12,
           marginBottom: 8,
         }}
       >
@@ -87,13 +88,33 @@ export function InvestmentBalancesSection({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
             minWidth: 0,
-            flexWrap: "wrap",
-            width: "100%",
           }}
         >
-          <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
+          <Label
+            style={{
+              marginBottom: 0,
+              fontWeight: 800,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Investment Balances
+          </Label>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexShrink: 0,
+            justifyContent: "flex-end",
+            whiteSpace: "nowrap",
+          }}
+        >
           {visibleSources.length > 0 && (
             <Badge
               variant="outline"
@@ -102,6 +123,7 @@ export function InvestmentBalancesSection({
                 color: T.accent.emerald,
                 borderColor: `${T.accent.emerald}35`,
                 background: `${T.accent.emerald}10`,
+                flexShrink: 0,
               }}
             >
               {visibleSources.length} {visibleSources.length === 1 ? "SOURCE" : "SOURCES"}
@@ -118,23 +140,15 @@ export function InvestmentBalancesSection({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
-              <Mono size={12.5} weight={800} color={T.accent.emerald}>
+              <Mono size={summaryMonoSize} weight={800} color={T.accent.emerald}>
                 {fmt(totalBalance)}
               </Mono>
             </div>
           )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexShrink: 0,
-            justifyContent: "flex-end",
-          }}
-        >
           <SectionAddControl
             accent={T.accent.emerald}
             buttonAriaLabel="Add investment balance to audit"
