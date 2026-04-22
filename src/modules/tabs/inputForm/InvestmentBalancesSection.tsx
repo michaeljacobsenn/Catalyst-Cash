@@ -63,7 +63,6 @@ export function InvestmentBalancesSection({
       })),
     [hiddenSources]
   );
-  const stackHeader = isNarrowPhone && addableFields.length > 0;
 
   const handleAddField = (sourceId: string) => {
     const source = hiddenSources.find((entry) => entry.id === sourceId);
@@ -77,12 +76,10 @@ export function InvestmentBalancesSection({
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
       <div
         style={{
-          display: "flex",
-          flexDirection: stackHeader ? "column" : "row",
-          alignItems: stackHeader ? "stretch" : "flex-start",
-          justifyContent: "space-between",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          alignItems: "start",
           gap: 10,
-          flexWrap: "wrap",
           marginBottom: 8,
         }}
       >
@@ -93,8 +90,7 @@ export function InvestmentBalancesSection({
             gap: 8,
             minWidth: 0,
             flexWrap: "wrap",
-            flex: 1,
-            width: stackHeader ? "100%" : undefined,
+            width: "100%",
           }}
         >
           <Label style={{ marginBottom: 0, fontWeight: 800 }}>Investment Balances</Label>
@@ -136,8 +132,7 @@ export function InvestmentBalancesSection({
             alignItems: "center",
             gap: 8,
             flexShrink: 0,
-            width: stackHeader ? "100%" : "auto",
-            justifyContent: stackHeader ? "flex-end" : "flex-start",
+            justifyContent: "flex-end",
           }}
         >
           <SectionAddControl
