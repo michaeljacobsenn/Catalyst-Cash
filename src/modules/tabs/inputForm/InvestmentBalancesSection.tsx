@@ -50,7 +50,7 @@ export function InvestmentBalancesSection({
   const { isNarrowPhone, isTablet } = useResponsiveLayout();
   const rowActionSize = isTablet ? 36 : 34;
   const investmentRowGrid = isNarrowPhone
-    ? `minmax(0, 1fr) ${rowActionSize}px`
+    ? `minmax(0, 1fr) auto ${rowActionSize}px`
     : isTablet
       ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
       : INVESTMENT_ROW_GRID;
@@ -216,7 +216,49 @@ export function InvestmentBalancesSection({
                   </div>
                 </div>
               </div>
-              {isNarrowPhone ? (
+              {isNarrowPhone && !showManualInput ? (
+                <>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "fit-content",
+                      minHeight: rowActionSize + 2,
+                      background: `${source.accent}0C`,
+                      border: `1px solid ${source.accent}30`,
+                      borderRadius: T.radius.md,
+                      padding: "0 14px",
+                      whiteSpace: "nowrap",
+                      transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                      justifySelf: "end",
+                      alignSelf: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Mono size={12.5} weight={800} color={source.accent}>
+                      {fmt(resolvedDisplayValue)}
+                    </Mono>
+                  </div>
+                  <button type="button"
+                    onClick={() => onRemoveSource(source.id)}
+                    style={{
+                      width: rowActionSize,
+                      height: rowActionSize,
+                      borderRadius: T.radius.sm,
+                      border: "none",
+                      background: `${source.accent}14`,
+                      color: source.accent,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </>
+              ) : isNarrowPhone ? (
                 <div
                   style={{
                     gridColumn: "1 / -1",
@@ -227,35 +269,13 @@ export function InvestmentBalancesSection({
                     minWidth: 0,
                   }}
                 >
-                  {showManualInput ? (
-                    <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
-                      <DI
-                        value={inputValue}
-                        onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
-                        placeholder="Enter value"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minWidth: 132,
-                        minHeight: rowActionSize + 2,
-                        background: `${source.accent}0C`,
-                        border: `1px solid ${source.accent}30`,
-                        borderRadius: T.radius.md,
-                        padding: "0 14px",
-                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Mono size={12.5} weight={800} color={source.accent}>
-                        {fmt(resolvedDisplayValue)}
-                      </Mono>
-                    </div>
-                  )}
+                  <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                    <DI
+                      value={inputValue}
+                      onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
+                      placeholder="Enter value"
+                    />
+                  </div>
                   <button type="button"
                     onClick={() => onRemoveSource(source.id)}
                     style={{

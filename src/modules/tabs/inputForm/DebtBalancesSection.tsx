@@ -83,7 +83,7 @@ export function DebtBalancesSection({
   const { isNarrowPhone, isTablet } = useResponsiveLayout();
   const rowActionSize = isTablet ? 36 : 34;
   const debtRowGrid = isNarrowPhone
-    ? `minmax(0, 1fr) ${rowActionSize}px`
+    ? `minmax(0, 1fr) auto ${rowActionSize}px`
     : isTablet
       ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
       : DEBT_ROW_GRID;
@@ -314,7 +314,53 @@ export function DebtBalancesSection({
                   )}
                 </div>
 
-                {isNarrowPhone && isCardSelected ? (
+                {isNarrowPhone && isCardSelected && hasLiveBalance && !isOverridden ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "fit-content",
+                        minHeight: rowActionSize + 2,
+                        background: `${T.status.red}0C`,
+                        border: `1px solid ${T.status.red}30`,
+                        borderRadius: T.radius.md,
+                        padding: "0 14px",
+                        whiteSpace: "nowrap",
+                        transition:
+                          "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        justifySelf: "end",
+                        alignSelf: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Mono size={12.5} weight={800} color={T.status.red}>
+                        {fmt(liveBalance)}
+                      </Mono>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveDebtRow(index)}
+                      style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: T.status.redDim,
+                        color: T.status.red,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </>
+                ) : isNarrowPhone && isCardSelected ? (
                   <div
                     style={{
                       gridColumn: "1 / -1",
@@ -325,30 +371,7 @@ export function DebtBalancesSection({
                       minWidth: 0,
                     }}
                   >
-                    {hasLiveBalance && !isOverridden ? (
-                      <button
-                        type="button"
-                        onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          minWidth: 132,
-                          minHeight: rowActionSize + 2,
-                          background: `${T.status.red}0C`,
-                          border: `1px solid ${T.status.red}30`,
-                          borderRadius: T.radius.md,
-                          padding: "0 14px",
-                          transition:
-                            "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Mono size={12.5} weight={800} color={T.status.red}>
-                          {fmt(liveBalance)}
-                        </Mono>
-                      </button>
-                    ) : isOverridden && hasLiveBalance && debt.cardId ? (
+                    {isOverridden && hasLiveBalance && debt.cardId ? (
                       <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
                         <InlineOverrideMoneyInput
                           label={`Debt balance ${index + 1}`}

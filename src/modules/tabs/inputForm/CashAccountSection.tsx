@@ -64,7 +64,7 @@ export function CashAccountSection({
   const anyAccountOverridden = hasAccounts && meta.accounts.some((account) => accountOverrides[account.id] !== undefined);
   const rowActionSize = isTablet ? 36 : 34;
   const accountRowGrid = isNarrowPhone
-    ? `minmax(0, 1fr) ${rowActionSize}px`
+    ? `minmax(0, 1fr) auto ${rowActionSize}px`
     : isTablet
       ? "minmax(0, 1fr) minmax(136px, 188px) 36px"
       : ACCOUNT_ROW_GRID;
@@ -240,7 +240,51 @@ export function CashAccountSection({
                   </div>
                 </div>
 
-                {isNarrowPhone ? (
+                {isNarrowPhone && !isOverridden ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "fit-content",
+                        minHeight: rowActionSize + 2,
+                        background: `${toneColor}0C`,
+                        border: `1px solid ${toneColor}30`,
+                        borderRadius: T.radius.md,
+                        padding: "0 14px",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                        justifySelf: "end",
+                        alignSelf: "center",
+                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                      }}
+                    >
+                      <Mono size={12.5} weight={800} color={toneColor}>
+                        {fmt(account.amount)}
+                      </Mono>
+                    </button>
+                    <button type="button"
+                      onClick={() => onRemoveAccount(account.id)}
+                      style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: `${toneColor}14`,
+                        color: toneColor,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </>
+                ) : isNarrowPhone ? (
                   <div
                     style={{
                       gridColumn: "1 / -1",
@@ -251,39 +295,15 @@ export function CashAccountSection({
                       minWidth: 0,
                     }}
                   >
-                    {isOverridden ? (
-                      <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
-                        <InlineOverrideMoneyInput
-                          label={`${account.displayLabel} override`}
-                          value={overrideValue}
-                          onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
-                          placeholder={fmt(account.amount)}
-                          onReset={() => onResetAccount(account.id)}
-                        />
-                      </div>
-                    ) : (
-                      <button type="button"
-                        onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          width: "fit-content",
-                          minWidth: 132,
-                          minHeight: rowActionSize + 2,
-                          background: `${toneColor}0C`,
-                          border: `1px solid ${toneColor}30`,
-                          borderRadius: T.radius.md,
-                          padding: "0 14px",
-                          flexShrink: 0,
-                          transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
-                        }}
-                      >
-                        <Mono size={12.5} weight={800} color={toneColor}>
-                          {fmt(account.amount)}
-                        </Mono>
-                      </button>
-                    )}
+                    <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                      <InlineOverrideMoneyInput
+                        label={`${account.displayLabel} override`}
+                        value={overrideValue ?? ("" as MoneyInput)}
+                        onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
+                        placeholder={fmt(account.amount)}
+                        onReset={() => onResetAccount(account.id)}
+                      />
+                    </div>
                     <button type="button"
                       onClick={() => onRemoveAccount(account.id)}
                       style={{
@@ -312,7 +332,7 @@ export function CashAccountSection({
                       >
                         <InlineOverrideMoneyInput
                           label={`${account.displayLabel} override`}
-                          value={overrideValue}
+                          value={overrideValue ?? ("" as MoneyInput)}
                           onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
                           placeholder={fmt(account.amount)}
                           onReset={() => onResetAccount(account.id)}
@@ -377,8 +397,8 @@ export function CashAccountSection({
             }}
           >
             No accounts are currently included. Add back only the balances you want this briefing to consider.
-          </div>
-        </div>
+                </div>
+              </div>
       ) : effectiveTotal !== null && !aggregateOverrideActive ? (
         <button type="button"
           onClick={onEnableAggregateOverride}
