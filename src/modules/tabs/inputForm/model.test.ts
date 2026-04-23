@@ -559,7 +559,7 @@ describe("input form model helpers", () => {
     expect(sources.map((source) => source.id)).toEqual(["plaid:legacy-roth-linked"]);
   });
 
-  it("keeps a distinct manual investment source when it does not duplicate the linked bucket total", () => {
+  it("does not create a stale manual investment source when a linked bucket is live and override is off", () => {
     const sources = buildInvestmentAuditSources({
       trackingConfig: {
         trackRoth: true,
@@ -578,7 +578,45 @@ describe("input form model helpers", () => {
       ],
     });
 
+    expect(sources.map((source) => source.id)).toEqual(["plaid:roth-linked"]);
+  });
+
+  it("keeps a distinct manual investment source when a manual override is explicit", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+        overrideRothValue: true,
+      },
+      form: createForm({
+        roth: "1200",
+      }),
+      plaidInvestments: [
+        {
+          id: "roth-linked",
+          bucket: "roth",
+          institution: "Vanguard",
+          name: "Michael Roth IRA",
+          _plaidBalance: 6362.74,
+        },
+      ],
+    });
+
     expect(sources.map((source) => source.id)).toEqual(["manual-balance:roth", "plaid:roth-linked"]);
+  });
+
+  it("keeps a manual investment source when no linked or holding source exists for that bucket", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "1200",
+      }),
+      plaidInvestments: [],
+      holdings: {},
+    });
+
+    expect(sources.map((source) => source.id)).toEqual(["manual-balance:roth"]);
   });
 
   it("does not assume a manual investment bucket exists when there is no real balance to include", () => {

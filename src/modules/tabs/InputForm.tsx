@@ -298,7 +298,14 @@ export default function InputForm({
 
   useEffect(() => {
     setForm((prev) => suppressRedundantManualInvestmentSeeds(prev, typedFinancialConfig));
-  }, [typedFinancialConfig.plaidInvestments, typedFinancialConfig.enableHoldings, typedFinancialConfig.holdings]);
+  }, [
+    typedFinancialConfig.plaidInvestments,
+    typedFinancialConfig.enableHoldings,
+    typedFinancialConfig.holdings,
+    typedFinancialConfig.override401kValue,
+    typedFinancialConfig.overrideBrokerageValue,
+    typedFinancialConfig.overrideRothValue,
+  ]);
 
   useEffect(() => {
     void loadHoldingValues(financialConfig, setHoldingValues, setHoldingBreakdowns);

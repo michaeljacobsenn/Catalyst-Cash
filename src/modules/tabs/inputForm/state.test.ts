@@ -185,12 +185,26 @@ describe("input form state helpers", () => {
     expect(state.debts).toHaveLength(1);
   });
 
-  it("keeps distinct manual investment values when a linked bucket is also live", () => {
+  it("suppresses stale manual investment values when a linked bucket is live and override is off", () => {
     const state = createInitialInputFormState({
       today: new Date("2026-03-16T10:30:00Z"),
       plaidData: { checking: 1000, vault: 500, debts: [] },
       config: {
         investmentRoth: 3000,
+        plaidInvestments: [{ id: "plaid-roth", bucket: "roth", _plaidBalance: 3250 }],
+      },
+    });
+
+    expect(state.roth).toBe("");
+  });
+
+  it("keeps distinct manual investment values when manual override is explicit", () => {
+    const state = createInitialInputFormState({
+      today: new Date("2026-03-16T10:30:00Z"),
+      plaidData: { checking: 1000, vault: 500, debts: [] },
+      config: {
+        investmentRoth: 3000,
+        overrideRothValue: true,
         plaidInvestments: [{ id: "plaid-roth", bucket: "roth", _plaidBalance: 3250 }],
       },
     });

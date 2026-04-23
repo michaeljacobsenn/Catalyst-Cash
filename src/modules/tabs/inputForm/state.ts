@@ -80,6 +80,15 @@ function isLikelySameInvestmentTotal(manualValue: number, linkedValue: number) {
   return Math.abs(manualValue - linkedValue) <= tolerance;
 }
 
+function allowsManualInvestmentBalance(
+  config: Partial<CatalystCashConfig> | null | undefined,
+  bucket: "roth" | "brokerage" | "k401"
+) {
+  if (bucket === "roth") return Boolean(config?.overrideRothValue);
+  if (bucket === "brokerage") return Boolean(config?.overrideBrokerageValue);
+  return Boolean(config?.override401kValue);
+}
+
 export function suppressRedundantManualInvestmentSeeds(
   form: InputFormState,
   config: Partial<CatalystCashConfig> | null | undefined
@@ -88,19 +97,28 @@ export function suppressRedundantManualInvestmentSeeds(
   const next = { ...form };
   const rothManual = toNumber(form.roth);
   const rothLinked = getLinkedPlaidBucketTotal(config, "roth");
-  if (isLikelySameInvestmentTotal(rothManual, rothLinked)) {
+  if (rothManual > 0.004 && rothLinked > 0.004 && !allowsManualInvestmentBalance(config, "roth")) {
+    next.roth = "";
+    changed = true;
+  } else if (isLikelySameInvestmentTotal(rothManual, rothLinked)) {
     next.roth = "";
     changed = true;
   }
   const brokerageManual = toNumber(form.brokerage);
   const brokerageLinked = getLinkedPlaidBucketTotal(config, "brokerage");
-  if (isLikelySameInvestmentTotal(brokerageManual, brokerageLinked)) {
+  if (brokerageManual > 0.004 && brokerageLinked > 0.004 && !allowsManualInvestmentBalance(config, "brokerage")) {
+    next.brokerage = "";
+    changed = true;
+  } else if (isLikelySameInvestmentTotal(brokerageManual, brokerageLinked)) {
     next.brokerage = "";
     changed = true;
   }
   const k401Manual = toNumber(form.k401Balance);
   const k401Linked = getLinkedPlaidBucketTotal(config, "k401");
-  if (isLikelySameInvestmentTotal(k401Manual, k401Linked)) {
+  if (k401Manual > 0.004 && k401Linked > 0.004 && !allowsManualInvestmentBalance(config, "k401")) {
+    next.k401Balance = "";
+    changed = true;
+  } else if (isLikelySameInvestmentTotal(k401Manual, k401Linked)) {
     next.k401Balance = "";
     changed = true;
   }

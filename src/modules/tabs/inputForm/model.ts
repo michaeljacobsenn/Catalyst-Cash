@@ -77,6 +77,9 @@ export interface InvestmentTrackingConfig {
   trackRothContributions?: boolean;
   trackBrokerage?: boolean;
   track401k?: boolean;
+  overrideRothValue?: boolean;
+  overrideBrokerageValue?: boolean;
+  override401kValue?: boolean;
 }
 
 export interface InvestmentAutoValues {
@@ -103,6 +106,15 @@ function isLikelySameInvestmentTotal(manualValue: number, concreteValue: number)
   if (manualValue <= 0.004 || concreteValue <= 0.004) return false;
   const tolerance = Math.max(2, Math.abs(concreteValue) * 0.0025);
   return Math.abs(manualValue - concreteValue) <= tolerance;
+}
+
+function allowsManualInvestmentBalance(
+  trackingConfig: InvestmentTrackingConfig,
+  bucket: InvestmentAuditSource["bucket"]
+) {
+  if (bucket === "roth") return Boolean(trackingConfig.overrideRothValue);
+  if (bucket === "brokerage") return Boolean(trackingConfig.overrideBrokerageValue);
+  return Boolean(trackingConfig.override401kValue);
 }
 
 export function buildCashAccountMeta(
@@ -318,8 +330,13 @@ export function buildInvestmentAuditSources({
     );
     const concreteBucketTotal = concreteHoldingTotal + concretePlaidTotal;
     const manualDuplicatesConcrete = isLikelySameInvestmentTotal(manualInputValue, concreteBucketTotal);
+    const hasConcreteBucketSources = concreteBucketTotal > 0.004;
+    const shouldIncludeManualBalance =
+      manualInputValue > 0.004 &&
+      !manualDuplicatesConcrete &&
+      (!hasConcreteBucketSources || allowsManualInvestmentBalance(trackingConfig, bucket));
 
-    if (manualInputValue > 0.004 && !manualDuplicatesConcrete) {
+    if (shouldIncludeManualBalance) {
       sources.push({
         id: `manual-balance:${bucket}`,
         bucket,
