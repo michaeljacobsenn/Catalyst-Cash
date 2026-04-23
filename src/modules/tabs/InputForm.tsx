@@ -1021,19 +1021,39 @@ export default function InputForm({
         onToggleConfirmed={togglePendingChargeConfirmed}
       />
 
-      <Card style={{ marginTop: 4, marginBottom: 0, background: T.bg.card, border: `1px solid ${T.border.subtle}` }}>
-        <Label>Week-specific notes</Label>
-        <p style={{ fontSize: 11, color: T.text.muted, marginBottom: 10, lineHeight: 1.4 }}>
-          Use this for week-specific facts the audit must respect, like bills already paid or reimbursements on the way.
-        </p>
+      <Card style={{ marginTop: 0, marginBottom: 0, padding: "14px", background: T.bg.card, border: `1px solid ${T.border.subtle}` }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <Label style={{ marginBottom: 4 }}>Week notes</Label>
+            <p style={{ fontSize: 11.5, color: T.text.muted, margin: 0, lineHeight: 1.45 }}>
+              Add only what changed this week: paid bills, reimbursements, skipped purchases.
+            </p>
+          </div>
+          <span
+            style={{
+              flexShrink: 0,
+              borderRadius: 999,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.dim,
+              fontSize: 9,
+              fontFamily: T.font.mono,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              padding: "5px 8px",
+            }}
+          >
+            OPTIONAL
+          </span>
+        </div>
         <textarea
           aria-label="Notes for this week"
           value={form.notes || ""}
           onChange={(event) => s("notes", event.target.value)}
-          placeholder="e.g. Rent already paid, $200 reimbursement coming, skip gas this paycheck."
+          placeholder="e.g. Rent is already paid. $200 reimbursement arrives Friday."
           style={{
             width: "100%",
-            minHeight: 96,
+            minHeight: 78,
             padding: "12px",
             borderRadius: T.radius.md,
             border: `1.5px solid ${T.border.default}`,
@@ -1314,19 +1334,19 @@ export default function InputForm({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            marginBottom: 10,
-            padding: "9px 12px",
-            borderRadius: T.radius.lg,
-            background: `${T.accent.primary}0D`,
-            border: `1px solid ${T.accent.primary}24`,
+            gap: 7,
+            marginBottom: 8,
+            padding: "8px 10px",
+            borderRadius: 999,
+            background: T.bg.surface,
+            border: `1px solid ${T.border.subtle}`,
           }}
         >
           <UiGlyph glyph={plaidData.checking !== null ? "🏦" : "💡"} size={12} color={T.accent.primary} />
-          <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
+          <span style={{ fontSize: 10.5, color: T.text.secondary, lineHeight: 1.35 }}>
             {plaidData.checking !== null
-              ? "Balances pulled live from your linked bank accounts."
-              : "Balances pre-filled from your last audit — update what's changed."}
+              ? "Live linked balances are already included."
+              : "Prefilled from your last audit. Review what changed."}
           </span>
         </div>
       )}

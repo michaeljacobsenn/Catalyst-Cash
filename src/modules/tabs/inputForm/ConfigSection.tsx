@@ -48,10 +48,11 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
         aria-expanded={showConfig}
         style={{
           width: "100%",
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "auto minmax(0, 1fr) auto",
           alignItems: "center",
-          justifyContent: "space-between",
-          padding: "15px 18px",
+          gap: 12,
+          padding: "13px 14px",
           borderRadius: T.radius.lg,
           border: `1px solid ${showConfig ? T.border.default : T.border.subtle}`,
           background: showConfig ? T.bg.elevated : T.bg.card,
@@ -59,42 +60,40 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
           transition: "border-color 0.24s ease, background 0.24s ease, color 0.24s ease",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            minWidth: 54,
+            height: 26,
+            padding: "0 10px",
+            borderRadius: 999,
+            background: showConfig ? `${T.accent.primary}14` : T.bg.elevated,
+            border: `1px solid ${showConfig ? `${T.accent.primary}24` : T.border.subtle}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "background .24s ease, border-color .24s ease",
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 800, color: showConfig ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>
+            PROFILE
+          </span>
+        </div>
+        <div style={{ minWidth: 0, textAlign: "left" }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
+            Profile & AI rules
+          </div>
           <div
             style={{
-              minWidth: 54,
-              height: 24,
-              padding: "0 10px",
-              borderRadius: 999,
-              background: showConfig ? `${T.accent.primary}14` : T.bg.elevated,
-              border: `1px solid ${showConfig ? `${T.accent.primary}24` : T.border.subtle}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "background .24s ease, border-color .24s ease",
+              marginTop: 2,
+              fontSize: 11,
+              fontWeight: 500,
+              color: showConfig ? T.text.secondary : T.text.dim,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
-            <span style={{ fontSize: 10, fontWeight: 800, color: showConfig ? T.accent.primary : T.text.dim, fontFamily: T.font.mono, letterSpacing: "0.06em" }}>
-              PROFILE
-            </span>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em", color: T.text.primary }}>
-              Audit profile, notes, and AI rules
-            </div>
-            <div
-              style={{
-                marginTop: 2,
-                fontSize: 11,
-                fontWeight: 500,
-                color: showConfig ? T.text.secondary : T.text.dim,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {configSummary}
-            </div>
+            {configSummary}
           </div>
         </div>
         <div
@@ -102,6 +101,15 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
             transform: `rotate(${showConfig ? 180 : 0}deg)`,
             transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
             display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            background: showConfig ? `${T.accent.primary}12` : T.bg.elevated,
+            border: `1px solid ${showConfig ? `${T.accent.primary}24` : T.border.subtle}`,
+            color: showConfig ? T.accent.primary : T.text.muted,
+            flexShrink: 0,
           }}
         >
           <svg

@@ -148,6 +148,10 @@ export function PlaidTransactionsCard({
 }: PlaidTransactionsCardProps) {
   if (!plaidTransactions.length) return null;
   const totalSpend = plaidTransactions.reduce((sum, txn) => sum + txn.amount, 0);
+  const syncedLabel = txnFetchedAt
+    ? new Date(txnFetchedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
+  const includeLabel = proEnabled ? (includeRecentSpending ? "Included in audit" : "Excluded from audit") : "Pro required";
   return (
     <div
       style={{
@@ -162,29 +166,41 @@ export function PlaidTransactionsCard({
     >
       <div
         style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          alignItems: "start",
           gap: 12,
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: 1 }}>
-          <TrendingUp size={15} color={T.accent.primary} style={{ marginTop: 3, flexShrink: 0 }} />
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 12,
+              background: `${T.accent.primary}12`,
+              border: `1px solid ${T.accent.primary}18`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <TrendingUp size={14} color={T.accent.primary} />
+          </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: T.text.primary }}>Recent Spending</span>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: T.text.primary }}>Recent spending</span>
               <Badge style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}>
-                {plaidTransactions.length} txns
+                {plaidTransactions.length} TXNS
               </Badge>
             </div>
-            <div style={{ fontSize: 10.5, color: T.text.dim, marginTop: 3 }}>
-              {txnFetchedAt
-                ? `Synced ${new Date(txnFetchedAt).toLocaleDateString()} · Last 7 days`
-                : "Last 7 days of linked spend"}
+            <div style={{ fontSize: 10.5, color: T.text.dim, marginTop: 3, lineHeight: 1.4 }}>
+              {syncedLabel ? `Synced ${syncedLabel}` : "Linked spend"} · Last 7 days · {includeLabel}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 800, color: T.status.red, fontFamily: T.font.mono, lineHeight: 1 }}>
             -$
             {totalSpend.toLocaleString(undefined, {
@@ -192,18 +208,18 @@ export function PlaidTransactionsCard({
               maximumFractionDigits: 2,
             })}
           </span>
-          <Badge style={{ background: T.accent.primary + "20", color: T.accent.primary, fontSize: 10, fontWeight: 800 }}>
-            {includeRecentSpending ? "Included" : proEnabled ? "Excluded" : "Pro only"}
-          </Badge>
+          <span style={{ fontSize: 10, color: T.text.dim, fontFamily: T.font.mono, fontWeight: 800 }}>
+            SPEND
+          </span>
         </div>
       </div>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) auto",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           alignItems: "center",
-          gap: 10,
-          marginTop: 10,
+          gap: 8,
+          marginTop: 12,
         }}
       >
         <button type="button"
@@ -217,9 +233,10 @@ export function PlaidTransactionsCard({
           style={{
             display: "inline-flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
-            minHeight: 36,
-            width: "fit-content",
+            minHeight: 34,
+            width: "100%",
             padding: "0 12px",
             borderRadius: 999,
             border: `1px solid ${
@@ -236,6 +253,7 @@ export function PlaidTransactionsCard({
             cursor: proEnabled ? "pointer" : "not-allowed",
             opacity: proEnabled ? 1 : 0.75,
             justifySelf: "start",
+            whiteSpace: "nowrap",
           }}
         >
           <span
@@ -250,7 +268,7 @@ export function PlaidTransactionsCard({
                   : T.text.dim,
             }}
           />
-          {proEnabled ? (includeRecentSpending ? "Included in briefing" : "Exclude from briefing") : "Ledger is Pro"}
+          {proEnabled ? (includeRecentSpending ? "Included" : "Use in audit") : "Pro required"}
         </button>
         <button type="button"
          
@@ -261,8 +279,10 @@ export function PlaidTransactionsCard({
           style={{
             display: "inline-flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
-            minHeight: 36,
+            minHeight: 34,
+            width: "100%",
             padding: "0 12px",
             borderRadius: 999,
             border: `1px solid ${T.border.default}`,
@@ -271,9 +291,10 @@ export function PlaidTransactionsCard({
             fontSize: 11,
             fontWeight: 800,
             justifySelf: "end",
+            whiteSpace: "nowrap",
           }}
         >
-          {showTxns ? "Hide detail" : "Show detail"}
+          {showTxns ? "Hide details" : "Details"}
           {showTxns ? <ChevronUp size={14} color={T.text.muted} /> : <ChevronDown size={14} color={T.text.muted} />}
         </button>
       </div>

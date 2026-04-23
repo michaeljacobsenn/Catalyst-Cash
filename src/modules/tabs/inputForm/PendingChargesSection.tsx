@@ -65,12 +65,10 @@ export function PendingChargesSection({
     : isTablet
       ? "minmax(0, 1fr) minmax(132px, 176px) 36px"
       : "minmax(0, 1fr) minmax(112px, 148px) 36px";
-  const summaryPillHeight = isTablet ? 34 : 30;
-  const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
-  const compactAdd = !isTablet;
+  const hasPendingCharges = pendingCharges.length > 0;
 
   return (
-    <Card variant="glass" style={{ padding: "12px 14px", position: "relative", overflow: "hidden", marginBottom: 10 }}>
+    <Card variant="glass" style={{ padding: "13px 14px", position: "relative", overflow: "hidden", marginBottom: 8 }}>
       <div
         style={{
           position: "absolute",
@@ -88,73 +86,56 @@ export function PendingChargesSection({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto auto",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: pendingCharges.length > 0 ? 10 : 6,
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          alignItems: "start",
+          gap: 10,
+          marginBottom: hasPendingCharges ? 10 : 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Label
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+            <Label
+              style={{
+                marginBottom: 0,
+                fontWeight: 800,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Pending charges
+            </Label>
+            {hasPendingCharges && (
+              <span
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  border: `1px solid ${T.status.amber}35`,
+                  background: `${T.status.amber}10`,
+                  color: T.status.amber,
+                  fontSize: 9,
+                  fontWeight: 800,
+                  fontFamily: T.font.mono,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {pendingCharges.length} {pendingCharges.length === 1 ? "ITEM" : "ITEMS"}
+              </span>
+            )}
+          </div>
+          <div
             style={{
-              marginBottom: 0,
-              fontWeight: 800,
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              marginTop: 5,
+              color: T.text.secondary,
+              fontSize: 11.5,
+              lineHeight: 1.45,
             }}
           >
-            Pending Charges
-          </Label>
-          {pendingCharges.length > 0 && (
-            <div
-              style={{
-                padding: "4px 8px",
-                borderRadius: 999,
-                border: `1px solid ${T.status.amber}35`,
-                background: `${T.status.amber}10`,
-                color: T.status.amber,
-                fontSize: 9,
-                fontWeight: 800,
-                fontFamily: T.font.mono,
-                letterSpacing: "0.04em",
-              }}
-            >
-              {pendingCharges.length} {pendingCharges.length === 1 ? "ITEM" : "ITEMS"}
-            </div>
-          )}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexShrink: 0,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {pendingCharges.length > 0 && (
-            <div
-              style={{
-                minHeight: summaryPillHeight,
-                padding: summaryPillPadding,
-                borderRadius: 999,
-                border: `1px solid ${T.status.amber}35`,
-                background: `${T.status.amber}10`,
-                color: T.status.amber,
-                fontSize: isNarrowPhone ? 11.5 : 12.5,
-                fontWeight: 800,
-                fontFamily: T.font.mono,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              ${pendingChargeTotal.toFixed(2)}
-            </div>
-          )}
+            {hasPendingCharges
+              ? `$${pendingChargeTotal.toFixed(2)} in unposted charges will be included.`
+              : "Optional: add charges that have not posted yet so this week’s audit reflects real spending pressure."}
+          </div>
         </div>
         <button type="button"
           onClick={onAddCharge}
@@ -163,41 +144,25 @@ export function PendingChargesSection({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: compactAdd ? 0 : 5,
-            minWidth: compactAdd ? 30 : 62,
-            width: compactAdd ? 30 : undefined,
-            minHeight: 30,
-            padding: compactAdd ? 0 : "0 10px",
+            gap: 6,
+            minWidth: 66,
+            minHeight: 34,
+            padding: "0 12px",
             borderRadius: 999,
             border: `1px solid ${T.status.amber}40`,
             background: `${T.status.amber}12`,
             color: T.status.amber,
-            fontSize: 9.5,
+            fontSize: 10,
             fontWeight: 800,
             fontFamily: T.font.mono,
             letterSpacing: "0.04em",
             whiteSpace: "nowrap",
           }}
         >
-          <Plus size={10} />
-          {compactAdd ? null : "ADD"}
+          <Plus size={11} />
+          Add
         </button>
       </div>
-      {pendingCharges.length === 0 && (
-        <div
-          style={{
-            padding: "12px 14px",
-            borderRadius: T.radius.md,
-            background: T.bg.elevated,
-            border: `1px solid ${T.border.subtle}`,
-            color: T.text.secondary,
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          Add upcoming charges that have not posted yet so the audit respects this week’s real spending pressure.
-        </div>
-      )}
       {pendingCharges.map((charge, index) => (
         <div
           key={index}
