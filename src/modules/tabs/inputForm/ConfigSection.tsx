@@ -22,6 +22,11 @@ interface ConfigSectionProps<TConfig extends InputFormConfigSectionState> {
   personalRules: string;
   setPersonalRules: (value: string) => void;
   showAuditNotes?: boolean;
+  paycheckPlan?: {
+    enabled: boolean;
+    sourceLabel: string;
+    onToggle: () => void;
+  } | undefined;
   children?: ReactNode;
 }
 
@@ -36,6 +41,7 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
   personalRules,
   setPersonalRules,
   showAuditNotes = true,
+  paycheckPlan,
   children,
 }: ConfigSectionProps<TConfig>) {
   return (
@@ -317,6 +323,74 @@ export function ConfigSection<TConfig extends InputFormConfigSectionState>({
                     outline: "none",
                   }}
                 />
+              </div>
+            )}
+
+            {paycheckPlan && (
+              <div
+                style={{
+                  marginTop: 10,
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: T.radius.md,
+                  border: `1px solid ${paycheckPlan.enabled ? `${T.accent.primary}38` : T.border.subtle}`,
+                  background: paycheckPlan.enabled ? `${T.accent.primary}10` : T.bg.elevated,
+                  transition: "background-color .2s ease, border-color .2s ease",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: T.text.primary }}>
+                    Plan-ahead paycheck
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 2,
+                      fontSize: 10.5,
+                      lineHeight: 1.4,
+                      color: T.text.muted,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {paycheckPlan.sourceLabel} before it posts.
+                  </div>
+                </div>
+                <button type="button"
+                  aria-pressed={paycheckPlan.enabled}
+                  aria-label="Include upcoming paycheck in this audit"
+                  onClick={() => {
+                    haptic.light();
+                    paycheckPlan.onToggle();
+                  }}
+                  style={{
+                    width: 42,
+                    height: 24,
+                    borderRadius: 999,
+                    border: `1px solid ${paycheckPlan.enabled ? `${T.accent.primary}80` : T.border.default}`,
+                    background: paycheckPlan.enabled ? T.accent.primaryDim : T.bg.card,
+                    position: "relative",
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 999,
+                      background: paycheckPlan.enabled ? T.accent.primary : T.text.dim,
+                      position: "absolute",
+                      top: 2,
+                      left: 2,
+                      transform: paycheckPlan.enabled ? "translateX(18px)" : "translateX(0)",
+                      transition: "transform .2s ease, background-color .2s ease, box-shadow .2s ease",
+                      boxShadow: paycheckPlan.enabled ? `0 0 8px ${T.accent.primary}50` : "none",
+                    }}
+                  />
+                </button>
               </div>
             )}
           </Card>

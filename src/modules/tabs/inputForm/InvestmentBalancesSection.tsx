@@ -73,6 +73,7 @@ export function InvestmentBalancesSection({
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
   const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
   const compactAdd = !isTablet;
+  const sectionTitle = isNarrowPhone ? "Investments" : "Investment Balances";
 
   return (
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
@@ -103,7 +104,7 @@ export function InvestmentBalancesSection({
               whiteSpace: "nowrap",
             }}
           >
-            Investment Balances
+            {sectionTitle}
           </Label>
         </div>
         <div
@@ -219,8 +220,10 @@ export function InvestmentBalancesSection({
                 <div
                   style={{
                     minWidth: 0,
-                    gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                    maxWidth: isNarrowPhone ? 210 : undefined,
+                    gridColumn: isNarrowPhone ? "1 / 2" : undefined,
                     gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                    alignSelf: "center",
                   }}
                 >
                   <DI
@@ -235,14 +238,17 @@ export function InvestmentBalancesSection({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: "100%",
+                    width: isNarrowPhone ? "fit-content" : "100%",
+                    minWidth: isNarrowPhone ? 132 : undefined,
+                    maxWidth: isNarrowPhone ? "100%" : undefined,
                     minHeight: rowActionSize + 2,
                     background: `${source.accent}0C`,
                     border: `1px solid ${source.accent}30`,
                     borderRadius: T.radius.md,
                     padding: "0 12px",
-                    gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                    gridColumn: isNarrowPhone ? "1 / 2" : undefined,
                     gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                    justifySelf: isNarrowPhone ? "start" : undefined,
                     transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                     flexShrink: 0,
                   }}
@@ -266,8 +272,9 @@ export function InvestmentBalancesSection({
                   justifyContent: "center",
                   flexShrink: 0,
                   gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                  gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                  gridRow: isNarrowPhone ? "2 / 3" : undefined,
                   justifySelf: "end",
+                  alignSelf: "center",
                 }}
               >
                 <Trash2 size={11} />

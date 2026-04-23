@@ -688,6 +688,51 @@ export default function InputForm({
       return next;
     });
   };
+  const resetAuditSetup = () => {
+    haptic.medium();
+    const freshPlaid = getPlaidAutoFill(cards || [], bankAccounts || []) as PlaidAutoFillData;
+    setForm(
+      createInitialInputFormState({
+        today: new Date(),
+        plaidData: freshPlaid,
+        config: typedFinancialConfig,
+      })
+    );
+    setOverridePlaid({ checking: false, vault: false, debts: {}, cashAccounts: {} });
+    setDeletedDebtCardIds({});
+    setDeletedCashAccountIds({});
+    setDeletedInvestmentSourceIds(
+      Object.fromEntries((typedFinancialConfig.excludedInvestmentSourceIds || []).map((sourceId) => [sourceId, true]))
+    );
+    setBudgetActuals({});
+  };
+  const clearAuditSetup = () => {
+    haptic.medium();
+    const allCashAccountIds = [
+      ...checkingAccountMeta.accounts.map((account) => account.id),
+      ...savingsAccountMeta.accounts.map((account) => account.id),
+    ];
+    const liveDebtCardIds = (plaidData.debts || []).map((debt) => debt.cardId).filter(Boolean);
+
+    setForm((prev) => ({
+      ...prev,
+      checking: "",
+      savings: "",
+      roth: "",
+      brokerage: "",
+      k401Balance: "",
+      pendingCharges: [],
+      debts: [],
+      notes: "",
+      autoPaycheckAdd: false,
+      paycheckAddOverride: "",
+    }));
+    setOverridePlaid({ checking: true, vault: true, debts: {}, cashAccounts: {} });
+    setDeletedDebtCardIds(Object.fromEntries(liveDebtCardIds.map((cardId) => [cardId, true])));
+    setDeletedCashAccountIds(Object.fromEntries(allCashAccountIds.map((id) => [id, true])));
+    setDeletedInvestmentSourceIds(Object.fromEntries(investmentSources.map((source) => [source.id, true])));
+    setBudgetActuals({});
+  };
 
   return (
     <div
@@ -863,6 +908,45 @@ export default function InputForm({
           <span>{readySummary}</span>
           <span style={{ color: T.text.dim }}>•</span>
           <span style={{ color: statusTone }}>{statusSummary}</span>
+          <button type="button"
+            onClick={resetAuditSetup}
+            aria-label="Reset audit setup from current portfolio"
+            style={{
+              marginLeft: "auto",
+              minHeight: 28,
+              padding: "0 10px",
+              borderRadius: 999,
+              border: `1px solid ${T.border.subtle}`,
+              background: T.bg.elevated,
+              color: T.text.secondary,
+              fontSize: 10,
+              fontFamily: T.font.mono,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            Reset
+          </button>
+          <button type="button"
+            onClick={clearAuditSetup}
+            aria-label="Clear audit setup inputs"
+            style={{
+              minHeight: 28,
+              padding: "0 10px",
+              borderRadius: 999,
+              border: `1px solid ${T.border.subtle}`,
+              background: "transparent",
+              color: T.text.dim,
+              fontSize: 10,
+              fontFamily: T.font.mono,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            Clear
+          </button>
         </div>
       </div>
       <InputFormErrorBanner error={error} />
@@ -1082,89 +1166,16 @@ export default function InputForm({
           personalRules={personalRules}
           setPersonalRules={setPersonalRules}
           showAuditNotes={false}
+          paycheckPlan={
+            activeConfig.trackPaycheck !== false
+              ? {
+                  enabled: form.autoPaycheckAdd,
+                  sourceLabel: configuredPaycheckDisplay,
+                  onToggle: () => s("autoPaycheckAdd", !form.autoPaycheckAdd),
+                }
+              : undefined
+          }
         >
-          {activeConfig.trackPaycheck !== false && (
-              <Card style={{ marginBottom: 10, background: T.bg.card, border: `1px solid ${T.border.subtle}` }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      background: T.bg.card,
-                      borderRadius: T.radius.md,
-                      padding: "10px 12px",
-                      border: `1px solid ${T.border.subtle}`,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary, fontFamily: T.font.mono }}>
-                        PLAN-AHEAD PAYCHECK
-                      </div>
-                      <div style={{ fontSize: 11, color: T.text.muted, marginTop: 2 }}>
-                        Include upcoming paycheck not yet deposited
-                      </div>
-                    </div>
-                    <button type="button"
-                      onClick={() => {
-                        haptic.light();
-                        s("autoPaycheckAdd", !form.autoPaycheckAdd);
-                      }}
-                      style={{
-                        width: 44,
-                        height: 24,
-                        borderRadius: 999,
-                        border: `1px solid ${form.autoPaycheckAdd ? T.accent.primary : T.border.default}`,
-                        background: form.autoPaycheckAdd ? T.accent.primaryDim : T.bg.elevated,
-                        position: "relative",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: 999,
-                          background: form.autoPaycheckAdd ? T.accent.primary : T.bg.card,
-                          position: "absolute",
-                          top: 2,
-                          left: 2,
-                          transform: form.autoPaycheckAdd ? "translateX(20px)" : "translateX(0)",
-                          transition: "transform .2s ease, background-color .2s ease, box-shadow .2s ease",
-                          boxShadow: form.autoPaycheckAdd ? `0 0 6px ${T.accent.primary}60` : "0 1px 2px rgba(0,0,0,0.2)",
-                        }}
-                      />
-                    </button>
-                  </div>
-                  <div
-                    style={{
-                      background: T.bg.card,
-                      borderRadius: T.radius.md,
-                      padding: "10px 12px",
-                      border: `1px solid ${T.border.subtle}`,
-                      display: "grid",
-                      gap: 4,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: T.text.secondary,
-                        fontFamily: T.font.mono,
-                      }}
-                    >
-                      PAYCHECK SOURCE
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.text.primary }}>
-                      {configuredPaycheckDisplay}
-                    </div>
-                    <div style={{ fontSize: 11, lineHeight: 1.45, color: T.text.muted }}>
-                      Plan-ahead uses the income amount set in Audit Profile, Notes &amp; AI.
-                    </div>
-                  </div>
-                </div>
-              </Card>
-          )}
           {financialConfig?.enableHoldings &&
               financialConfig?.trackCrypto !== false &&
               (financialConfig?.holdings?.crypto || []).length > 0 &&

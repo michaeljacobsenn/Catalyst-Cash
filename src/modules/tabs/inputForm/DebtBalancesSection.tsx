@@ -103,6 +103,7 @@ export function DebtBalancesSection({
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
   const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
   const compactAdd = !isTablet;
+  const sectionTitle = isNarrowPhone ? "Credit Cards" : "Credit Card Balances";
 
   return (
     <Card
@@ -151,7 +152,7 @@ export function DebtBalancesSection({
               whiteSpace: "nowrap",
             }}
           >
-            Credit Card Balances
+            {sectionTitle}
           </Label>
         </div>
         <div
@@ -318,8 +319,10 @@ export function DebtBalancesSection({
                     isCardSelected
                       ? {
                           minWidth: 0,
-                          gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                          maxWidth: isNarrowPhone ? 210 : undefined,
+                          gridColumn: isNarrowPhone ? "1 / 2" : undefined,
                           gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                          alignSelf: "center",
                         }
                       : {
                           minWidth: 0,
@@ -335,13 +338,16 @@ export function DebtBalancesSection({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        width: "100%",
+                        width: isNarrowPhone ? "fit-content" : "100%",
+                        minWidth: isNarrowPhone ? 132 : undefined,
+                        maxWidth: isNarrowPhone ? "100%" : undefined,
                         minHeight: rowActionSize + 2,
                         background: `${T.status.red}0C`,
                         border: `1px solid ${T.status.red}30`,
                         borderRadius: T.radius.md,
                         padding: "0 12px",
                         transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        justifySelf: isNarrowPhone ? "start" : undefined,
                       }}
                     >
                       <Mono size={12.5} weight={800} color={T.status.red}>
@@ -381,7 +387,8 @@ export function DebtBalancesSection({
                     flexShrink: 0,
                     justifySelf: isNarrowPhone ? "end" : "stretch",
                     gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                    gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                    gridRow: isNarrowPhone ? (isCardSelected ? "2 / 3" : "1 / 2") : undefined,
+                    alignSelf: "center",
                   }}
                 >
                   <Trash2 size={11} />

@@ -244,8 +244,10 @@ export function CashAccountSection({
                   <div
                     style={{
                       minWidth: 0,
-                      gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                      maxWidth: isNarrowPhone ? 210 : undefined,
+                      gridColumn: isNarrowPhone ? "1 / 2" : undefined,
                       gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                      alignSelf: "center",
                     }}
                   >
                     <InlineOverrideMoneyInput
@@ -263,15 +265,18 @@ export function CashAccountSection({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      width: "100%",
+                      width: isNarrowPhone ? "fit-content" : "100%",
+                      minWidth: isNarrowPhone ? 132 : undefined,
+                      maxWidth: isNarrowPhone ? "100%" : undefined,
                       minHeight: rowActionSize + 2,
                       background: `${toneColor}0C`,
                       border: `1px solid ${toneColor}30`,
                       borderRadius: T.radius.md,
                       padding: "0 12px",
                       flexShrink: 0,
-                      gridColumn: isNarrowPhone ? "1 / -1" : undefined,
+                      gridColumn: isNarrowPhone ? "1 / 2" : undefined,
                       gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                      justifySelf: isNarrowPhone ? "start" : undefined,
                       transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
                     }}
                   >
@@ -294,8 +299,9 @@ export function CashAccountSection({
                     justifyContent: "center",
                     flexShrink: 0,
                     gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                    gridRow: isNarrowPhone ? "1 / 2" : undefined,
+                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
                     justifySelf: "end",
+                    alignSelf: "center",
                   }}
                 >
                   <Trash2 size={11} />
