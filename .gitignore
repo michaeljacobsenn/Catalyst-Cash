@@ -79,6 +79,9 @@ refactor_card_portfolio.py
 test-results/
 playwright-report/
 coverage/
+.playwright-mcp/
+appstoreconnect-*.png
+release-backups/
 
 # Private prompt modules
 src/modules/*Prompts*.js

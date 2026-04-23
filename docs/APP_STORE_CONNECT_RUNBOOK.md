@@ -2,32 +2,35 @@
 
 Use this after the repo gates are green and the backend/site changes are already live.
 
-## Current state as of April 19, 2026
+## Current state as of April 23, 2026
 
 - Production config is live with `gatingMode: "live"` at `https://api.catalystcash.app/config`
 - Repo gates passed on this machine: `lint`, `typecheck`, and `test:e2e:critical`
-- Latest signed App Store Connect upload sent from this machine: build `45`
+- Latest signed App Store Connect upload sent from this machine: build `49`
 - App: `Catalyst Cash`
 - Bundle ID: `com.jacobsen.portfoliopro`
 - Version: `2.0.0`
-- Public TestFlight group now points only to build `45`
-- Build `45` is attached to `iOS App Version 2.0.0`
-- Build `45` is approved for external testing and live on the public TestFlight link
+- Public TestFlight group now points only to build `49`
+- Build `49` is attached to `iOS App Version 2.0.0`
+- Build `49` is approved for external testing and live on the public TestFlight link
+- Corrected iPhone 6.5-inch App Store screenshots are uploaded with the current app icon
+- Privacy policy is live at `https://catalystcash.app/privacy` with the April 23, 2026 update
 - Support / beta feedback email: `support@catalystcash.app`
 
 ## Minimal manual actions left
 
-### 1. Upload App Store screenshots and submit the store version
+### 1. Complete App Store Connect declarations and submit
 
-1. Upload your final App Store screenshots on the `iOS App Version 2.0.0` page.
-2. Confirm build `45` is attached to the version page.
-3. Click `Add for Review` when screenshots are in place.
+1. Save Content Rights once the final legal representation is confirmed.
+2. Update App Privacy from `Data Not Collected` to match the live privacy policy and production telemetry behavior.
+3. Complete Digital Services Act setup if Apple requires trader/contact information for the account.
+4. Click `Add for Review` only after the declarations are complete.
 
 ### 2. Monitor public TestFlight
 
 1. Confirm the public link is still `https://testflight.apple.com/join/3rpWQq49`.
 2. If Apple shows a tester notification action, use it.
-3. Watch incoming public-test feedback for build `45`.
+3. Watch incoming public-test feedback for build `49`.
 
 ### 3. Confirm IAP state in App Store Connect
 
@@ -82,6 +85,15 @@ No account signup or login is required. Reviewers can complete onboarding with m
 ### App Review Notes
 
 No account signup or login is required. Reviewers can complete onboarding with manual entry or Load Demo Data; bank linking via Plaid is optional and not required for review. Primary flows are onboarding, first audit, dashboard/results, weekly briefing, encrypted backup/export, restore, and subscription purchase or restore. Core records remain stored locally on device. Network calls are limited to optional AI, Plaid, and provider features.
+
+## Recommended App Privacy disclosure posture
+
+- Data collected: yes
+- Tracking: no
+- Likely data types: financial info, location, identifiers, purchase history, usage data, diagnostics, and user content entered into AI or audit flows
+- Likely purposes: app functionality, analytics, and product personalization
+- Linked to user: yes where tied to device, actor, Plaid, RevenueCat, or backend identifiers
+- Third-party advertising: no
 
 ## Recommended App Store copy
 

@@ -290,6 +290,7 @@ const SEEDED_STORAGE = {
   "ai-provider": "backend",
   "ai-model": "gemini-2.5-flash",
   "ai-consent-accepted": true,
+  "theme-mode": "dark",
   "current-audit": SEEDED_AUDIT,
   "audit-history": [SEEDED_AUDIT],
   "move-states": {},
@@ -758,6 +759,7 @@ async function run() {
       deviceScaleFactor: 1,
       isMobile: device.isMobile,
       hasTouch: device.hasTouch,
+      colorScheme: "dark",
     });
 
     const page = await context.newPage();

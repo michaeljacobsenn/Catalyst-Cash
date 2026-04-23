@@ -66,7 +66,7 @@
           logs a short scrubbed excerpt of the AI response (up to 600 characters) for service reliability;
           this fragment never contains account numbers, balances, or other raw financial data.
         </p>
-        <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-03-05</div>
+        <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-04-23</div>
       </div>
 
       <section class="section">
@@ -79,8 +79,8 @@
           </div>
           <div class="summary-card">
             <span>Sent only when used</span>
-            <h2>Scrubbed AI requests and optional Plaid traffic</h2>
-            <p>AI requests and Plaid-linked account sync only happen when you choose to use those features.</p>
+            <h2>Scrubbed AI, Plaid, and rewards requests</h2>
+            <p>AI requests, Plaid-linked account sync, and location-based rewards helpers only run when you choose to use those features.</p>
           </div>
           <div class="summary-card">
             <span>Excluded from backup</span>
@@ -133,6 +133,15 @@
           </div>
           <div class="policy-card">
             <span>4</span>
+            <h2>Optional location-based rewards</h2>
+            <ul>
+              <li>If you allow location access, Catalyst Cash can use your approximate nearby context to help identify merchants and suggest the strongest card before you pay.</li>
+              <li>Location access is optional, permission-based, and used for app functionality rather than advertising or tracking.</li>
+              <li>You can disable location access at any time in iOS Settings.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>5</span>
             <h2>Purchases and entitlement checks</h2>
             <ul>
               <li>Subscriptions are handled through Apple and RevenueCat.</li>
@@ -141,7 +150,7 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>5</span>
+            <span>6</span>
             <h2>Chat retention and privacy mode</h2>
             <ul>
               <li>Chat messages are stored locally and auto-expire after 24 hours.</li>
@@ -150,7 +159,7 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>6</span>
+            <span>7</span>
             <h2>Backups, encryption, and secure storage</h2>
             <ul>
               <li>Passcodes and similar secrets are stored with native secure storage when available.</li>
@@ -159,7 +168,16 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>7</span>
+            <span>8</span>
+            <h2>Operational telemetry</h2>
+            <ul>
+              <li>In production, Catalyst Cash may send scrubbed funnel milestones, support-risk events, and error diagnostics to help keep the app reliable.</li>
+              <li>Telemetry is designed to avoid raw financial details, account numbers, contact details, API keys, and access tokens.</li>
+              <li>These events may include a device identifier, timestamp, app action label, sanitized context, stack trace, or user-agent details.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>9</span>
             <h2>What we do not do</h2>
             <ul>
               <li>We do not sell your personal data.</li>
@@ -169,7 +187,7 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>8</span>
+            <span>10</span>
             <h2>Your choices</h2>
             <ul>
               <li>Use manual entry instead of Plaid.</li>
@@ -178,7 +196,7 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>9</span>
+            <span>11</span>
             <h2>Security measures</h2>
             <ul>
               <li>Native secure storage is used for passcodes and comparable sensitive local values where available.
@@ -189,7 +207,7 @@
             </ul>
           </div>
           <div class="policy-card">
-            <span>10</span>
+            <span>12</span>
             <h2>Policy changes and contact</h2>
             <ul>
               <li>We may update this policy as the product evolves.</li>

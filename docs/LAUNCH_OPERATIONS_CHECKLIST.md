@@ -7,7 +7,7 @@ Use this after the repo gates are green and before opening launch or a public Te
 - App: `Catalyst Cash`
 - Bundle ID: `com.jacobsen.portfoliopro`
 - Version: `2.0.0`
-- Build: `38`
+- Build: `49`
 
 ## Production backend
 
@@ -27,6 +27,9 @@ Use this after the repo gates are green and before opening launch or a public Te
 
 - Latest TestFlight build matches this repo launch candidate
 - The build is available to the intended tester group
+- Corrected App Store screenshots are uploaded for the 6.5-inch iPhone slot
+- App Store privacy declarations match the live privacy policy before review submission
+- Content Rights and Digital Services Act setup are completed before review submission when required
 - In-App Purchases are approved and attached to the app/version:
   - `com.catalystcash.pro.monthly.v2`
   - `com.catalystcash.pro.yearly.v2`
@@ -49,7 +52,8 @@ Use this after the repo gates are green and before opening launch or a public Te
 
 ## Public testing posture
 
-- Public TestFlight keeps build `37` live while build `38` clears external beta review
+- Public TestFlight keeps build `49` live for the public testing wave
 - Marketing/site CTA points to the live public TestFlight link
+- Privacy policy at `https://catalystcash.app/privacy` reflects optional AI, Plaid, rewards location, purchase, and telemetry behavior
 - Feedback email is `support@catalystcash.app`
 - Testers know where to send bugs, screenshots, and reproduction steps
