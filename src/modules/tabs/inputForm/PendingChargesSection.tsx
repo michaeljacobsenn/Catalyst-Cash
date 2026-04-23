@@ -65,6 +65,9 @@ export function PendingChargesSection({
     : isTablet
       ? "minmax(0, 1fr) minmax(132px, 176px) 36px"
       : "minmax(0, 1fr) minmax(112px, 148px) 36px";
+  const summaryPillHeight = isTablet ? 34 : 30;
+  const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
+  const compactAdd = !isTablet;
 
   return (
     <Card variant="glass" style={{ padding: "12px 14px", position: "relative", overflow: "hidden", marginBottom: 10 }}>
@@ -84,16 +87,26 @@ export function PendingChargesSection({
       />
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: isNarrowPhone ? "flex-start" : "center",
-          gap: 10,
-          flexWrap: isNarrowPhone ? "wrap" : "nowrap",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto auto",
+          alignItems: "center",
+          gap: 8,
           marginBottom: pendingCharges.length > 0 ? 10 : 6,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <Label style={{ marginBottom: 0, fontWeight: 800 }}>Pending Charges</Label>
+          <Label
+            style={{
+              marginBottom: 0,
+              fontWeight: 800,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Pending Charges
+          </Label>
           {pendingCharges.length > 0 && (
             <div
               style={{
@@ -116,58 +129,59 @@ export function PendingChargesSection({
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: isNarrowPhone && pendingCharges.length > 0 ? "space-between" : "flex-end",
             gap: 8,
-            flexWrap: "wrap",
             flexShrink: 0,
-            width: isNarrowPhone ? "100%" : undefined,
+            whiteSpace: "nowrap",
           }}
         >
           {pendingCharges.length > 0 && (
             <div
               style={{
-                minWidth: isNarrowPhone ? 0 : 92,
-                minHeight: 32,
-                padding: "0 12px",
+                minHeight: summaryPillHeight,
+                padding: summaryPillPadding,
                 borderRadius: 999,
                 border: `1px solid ${T.status.amber}35`,
                 background: `${T.status.amber}10`,
                 color: T.status.amber,
-                fontSize: 13,
+                fontSize: isNarrowPhone ? 11.5 : 12.5,
                 fontWeight: 800,
                 fontFamily: T.font.mono,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               ${pendingChargeTotal.toFixed(2)}
             </div>
           )}
-          <button type="button"
-            onClick={onAddCharge}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              minWidth: 68,
-              minHeight: 32,
-              padding: "0 12px",
-              borderRadius: 999,
-              border: `1px solid ${T.status.amber}40`,
-              background: `${T.status.amber}12`,
-              color: T.status.amber,
-              fontSize: 10,
-              fontWeight: 800,
-              fontFamily: T.font.mono,
-              letterSpacing: "0.04em",
-            }}
-          >
-            <Plus size={11} />
-            ADD
-          </button>
         </div>
+        <button type="button"
+          onClick={onAddCharge}
+          aria-label="Add pending charge to audit"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: compactAdd ? 0 : 5,
+            minWidth: compactAdd ? 30 : 62,
+            width: compactAdd ? 30 : undefined,
+            minHeight: 30,
+            padding: compactAdd ? 0 : "0 10px",
+            borderRadius: 999,
+            border: `1px solid ${T.status.amber}40`,
+            background: `${T.status.amber}12`,
+            color: T.status.amber,
+            fontSize: 9.5,
+            fontWeight: 800,
+            fontFamily: T.font.mono,
+            letterSpacing: "0.04em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Plus size={10} />
+          {compactAdd ? null : "ADD"}
+        </button>
       </div>
       {pendingCharges.length === 0 && (
         <div

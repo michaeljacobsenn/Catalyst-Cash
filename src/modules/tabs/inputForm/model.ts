@@ -95,6 +95,16 @@ const INVESTMENT_BUCKET_META = {
   k401: { label: "401(k)", accent: "#3B82F6", formKey: "k401Balance" },
 } as const;
 
+function getPlaidInvestmentAmount(account: Partial<PlaidInvestmentAccount> | null | undefined) {
+  return Number(account?._plaidBalance ?? (account as { balance?: unknown } | null | undefined)?.balance ?? 0) || 0;
+}
+
+function isLikelySameInvestmentTotal(manualValue: number, concreteValue: number) {
+  if (manualValue <= 0.004 || concreteValue <= 0.004) return false;
+  const tolerance = Math.max(2, Math.abs(concreteValue) * 0.0025);
+  return Math.abs(manualValue - concreteValue) <= tolerance;
+}
+
 export function buildCashAccountMeta(
   accounts: BankAccount[] = [],
   accountType: "checking" | "savings",
@@ -292,19 +302,37 @@ export function buildInvestmentAuditSources({
     if (!enabled) return;
 
     const manualInputValue = toNumber(form[meta.formKey]);
-    sources.push({
-      id: `manual-balance:${bucket}`,
-      bucket,
-      label: meta.label,
-      detail: "Manual balance",
-      accent: meta.accent,
-      amount: manualInputValue,
-      sourceType: "manual-balance",
-      editable: true,
-      formKey: meta.formKey,
-    });
-
     const bucketHoldings = Array.isArray(holdings?.[bucket]) ? holdings[bucket] : [];
+    const concreteHoldingTotal = trackingConfig.enableHoldings
+      ? bucketHoldings.reduce((sum, holding) => {
+          const sourceId = getManualHoldingSourceId(bucket, holding);
+          return sum + (sourceId ? Number(holdingBreakdowns[sourceId] || 0) : 0);
+        }, 0)
+      : 0;
+    const bucketPlaidAccounts = plaidInvestments.filter(
+      (account) => account?.bucket === bucket && getPlaidInvestmentAmount(account) > 0.004
+    );
+    const concretePlaidTotal = bucketPlaidAccounts.reduce(
+      (sum, account) => sum + getPlaidInvestmentAmount(account),
+      0
+    );
+    const concreteBucketTotal = concreteHoldingTotal + concretePlaidTotal;
+    const manualDuplicatesConcrete = isLikelySameInvestmentTotal(manualInputValue, concreteBucketTotal);
+
+    if (manualInputValue > 0.004 && !manualDuplicatesConcrete) {
+      sources.push({
+        id: `manual-balance:${bucket}`,
+        bucket,
+        label: meta.label,
+        detail: "Manual balance",
+        accent: meta.accent,
+        amount: manualInputValue,
+        sourceType: "manual-balance",
+        editable: true,
+        formKey: meta.formKey,
+      });
+    }
+
     if (trackingConfig.enableHoldings && bucketHoldings.length > 0) {
       bucketHoldings.forEach((holding) => {
         const sourceId = getManualHoldingSourceId(bucket, holding);
@@ -324,9 +352,7 @@ export function buildInvestmentAuditSources({
       });
     }
 
-    plaidInvestments
-      .filter((account) => account?.bucket === bucket && Number(account?._plaidBalance || 0) > 0)
-      .forEach((account) => {
+    bucketPlaidAccounts.forEach((account) => {
         const institution = String(account?.institution || "").trim();
         const name = String(account?.name || meta.label).trim();
         sources.push({
@@ -335,7 +361,7 @@ export function buildInvestmentAuditSources({
           label: name,
           detail: institution ? `${institution} · linked account` : "Linked account",
           accent: meta.accent,
-          amount: Number(account?._plaidBalance || 0),
+          amount: getPlaidInvestmentAmount(account),
           sourceType: "plaid-account",
           editable: false,
         });

@@ -63,18 +63,21 @@ function formatFormTime(date: Date) {
   return date.toTimeString().slice(0, 5);
 }
 
-function bucketHasConcreteInvestmentSource(
+function getLinkedPlaidBucketTotal(
   config: Partial<CatalystCashConfig> | null | undefined,
   bucket: "roth" | "brokerage" | "k401"
 ) {
-  const livePlaidBucket = Array.isArray(config?.plaidInvestments)
-    && config.plaidInvestments.some(
-      (account) => account?.bucket === bucket && Number(account?._plaidBalance || 0) > 0
-    );
-  const hasManualHoldings = Boolean(config?.enableHoldings)
-    && Array.isArray(config?.holdings?.[bucket])
-    && config.holdings[bucket].length > 0;
-  return livePlaidBucket || hasManualHoldings;
+  if (!Array.isArray(config?.plaidInvestments)) return 0;
+  return config.plaidInvestments.reduce((sum, account) => {
+    if (account?.bucket !== bucket) return sum;
+    return sum + Number(account?._plaidBalance ?? (account as { balance?: unknown } | null | undefined)?.balance ?? 0);
+  }, 0);
+}
+
+function isLikelySameInvestmentTotal(manualValue: number, linkedValue: number) {
+  if (manualValue <= 0.004 || linkedValue <= 0.004) return false;
+  const tolerance = Math.max(2, Math.abs(linkedValue) * 0.0025);
+  return Math.abs(manualValue - linkedValue) <= tolerance;
 }
 
 export function suppressRedundantManualInvestmentSeeds(
@@ -83,15 +86,21 @@ export function suppressRedundantManualInvestmentSeeds(
 ): InputFormState {
   let changed = false;
   const next = { ...form };
-  if (bucketHasConcreteInvestmentSource(config, "roth") && String(form.roth ?? "").trim() !== "") {
+  const rothManual = toNumber(form.roth);
+  const rothLinked = getLinkedPlaidBucketTotal(config, "roth");
+  if (isLikelySameInvestmentTotal(rothManual, rothLinked)) {
     next.roth = "";
     changed = true;
   }
-  if (bucketHasConcreteInvestmentSource(config, "brokerage") && String(form.brokerage ?? "").trim() !== "") {
+  const brokerageManual = toNumber(form.brokerage);
+  const brokerageLinked = getLinkedPlaidBucketTotal(config, "brokerage");
+  if (isLikelySameInvestmentTotal(brokerageManual, brokerageLinked)) {
     next.brokerage = "";
     changed = true;
   }
-  if (bucketHasConcreteInvestmentSource(config, "k401") && String(form.k401Balance ?? "").trim() !== "") {
+  const k401Manual = toNumber(form.k401Balance);
+  const k401Linked = getLinkedPlaidBucketTotal(config, "k401");
+  if (isLikelySameInvestmentTotal(k401Manual, k401Linked)) {
     next.k401Balance = "";
     changed = true;
   }

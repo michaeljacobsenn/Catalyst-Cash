@@ -72,15 +72,16 @@ export function InvestmentBalancesSection({
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
   const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
+  const compactAdd = !isTablet;
 
   return (
     <Card variant="glass" style={{ marginBottom: 8, position: "relative", overflow: "hidden" }}>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gridTemplateColumns: "minmax(0, 1fr) auto auto",
           alignItems: "center",
-          gap: 12,
+          gap: 8,
           marginBottom: 8,
         }}
       >
@@ -111,7 +112,6 @@ export function InvestmentBalancesSection({
             alignItems: "center",
             gap: 8,
             flexShrink: 0,
-            justifyContent: "flex-end",
             whiteSpace: "nowrap",
           }}
         >
@@ -149,15 +149,16 @@ export function InvestmentBalancesSection({
               </Mono>
             </div>
           )}
-          <SectionAddControl
-            accent={T.accent.emerald}
-            buttonAriaLabel="Add investment balance to audit"
-            options={addableFields}
-            pickerLabel="Choose investment source"
-            placeholder="Select balance…"
-            onSelect={handleAddField}
-          />
         </div>
+        <SectionAddControl
+          accent={T.accent.emerald}
+          buttonAriaLabel="Add investment balance to audit"
+          options={addableFields}
+          pickerLabel="Choose investment source"
+          placeholder="Select balance…"
+          onSelect={handleAddField}
+          iconOnly={compactAdd}
+        />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {visibleSources.length === 0 && (

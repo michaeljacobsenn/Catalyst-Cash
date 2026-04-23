@@ -102,6 +102,7 @@ export function DebtBalancesSection({
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
   const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
+  const compactAdd = !isTablet;
 
   return (
     <Card
@@ -126,9 +127,9 @@ export function DebtBalancesSection({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gridTemplateColumns: "minmax(0, 1fr) auto auto",
           alignItems: "center",
-          gap: 12,
+          gap: 8,
           marginBottom: debts.length > 0 ? 8 : 6,
         }}
       >
@@ -159,7 +160,6 @@ export function DebtBalancesSection({
             alignItems: "center",
             gap: 8,
             flexShrink: 0,
-            justifyContent: "flex-end",
             whiteSpace: "nowrap",
           }}
         >
@@ -197,15 +197,16 @@ export function DebtBalancesSection({
               </Mono>
             </div>
           )}
-          <SectionAddControl
-            accent={T.status.red}
-            buttonAriaLabel="Add card balance to audit"
-            options={addableOptions}
-            pickerLabel="Choose card to add"
-            placeholder="Select card…"
-            onSelect={handleAddCard}
-          />
         </div>
+        <SectionAddControl
+          accent={T.status.red}
+          buttonAriaLabel="Add card balance to audit"
+          options={addableOptions}
+          pickerLabel="Choose card to add"
+          placeholder="Select card…"
+          onSelect={handleAddCard}
+          iconOnly={compactAdd}
+        />
       </div>
       {debts.length === 0 && (
         <div

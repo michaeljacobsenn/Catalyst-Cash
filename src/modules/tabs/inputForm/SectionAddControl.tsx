@@ -30,6 +30,7 @@ interface SectionAddControlProps {
   pickerLabel: string;
   placeholder: string;
   onSelect: (id: string) => void;
+  iconOnly?: boolean;
 }
 
 const CustomSelect = UICustomSelect as unknown as (props: CustomSelectProps) => ReactNode;
@@ -41,6 +42,7 @@ export function SectionAddControl({
   pickerLabel,
   placeholder,
   onSelect,
+  iconOnly = false,
 }: SectionAddControlProps) {
   const [showPicker, setShowPicker] = useState(false);
   const selectOptions = useMemo<SelectOption[]>(
@@ -73,10 +75,11 @@ export function SectionAddControl({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 5,
-          minWidth: 62,
+          gap: iconOnly ? 0 : 5,
+          minWidth: iconOnly ? 30 : 62,
           minHeight: 30,
-          padding: "0 10px",
+          width: iconOnly ? 30 : undefined,
+          padding: iconOnly ? 0 : "0 10px",
           borderRadius: 999,
           border: `1px solid ${accent}40`,
           background: `${accent}12`,
@@ -92,7 +95,7 @@ export function SectionAddControl({
         }}
       >
         <Plus size={10} strokeWidth={2.8} />
-        ADD
+        {iconOnly ? null : "ADD"}
       </button>
 
       {showPicker && options.length > 1 ? (

@@ -490,6 +490,109 @@ describe("input form model helpers", () => {
       "manual-holding:brokerage:holding_vxus",
       "plaid:brokerage-linked",
     ]);
-    expect(hiddenSources.map((source) => source.id)).toContain("manual-balance:brokerage");
+    expect(hiddenSources.map((source) => source.id)).not.toContain("manual-balance:brokerage");
+  });
+
+  it("does not create a generic manual investment bucket when a linked source already covers that bucket", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "6362.74",
+      }),
+      plaidInvestments: [
+        {
+          id: "roth-linked",
+          bucket: "roth",
+          institution: "Vanguard",
+          name: "Michael Roth IRA",
+          _plaidBalance: 6362.74,
+        },
+      ],
+    });
+
+    expect(sources.map((source) => source.id)).toEqual(["plaid:roth-linked"]);
+  });
+
+  it("does not create a generic manual investment bucket when the linked total has only drifted slightly", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "6356.64",
+      }),
+      plaidInvestments: [
+        {
+          id: "roth-linked",
+          bucket: "roth",
+          institution: "Vanguard",
+          name: "Michael Roth IRA",
+          _plaidBalance: 6362.74,
+        },
+      ],
+    });
+
+    expect(sources.map((source) => source.id)).toEqual(["plaid:roth-linked"]);
+  });
+
+  it("treats legacy linked investment balances as concrete sources for the same bucket", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "6362.74",
+      }),
+      plaidInvestments: [
+        {
+          id: "legacy-roth-linked",
+          bucket: "roth",
+          institution: "Vanguard",
+          name: "Legacy Roth IRA",
+          balance: 6362.74,
+        } as never,
+      ],
+    });
+
+    expect(sources.map((source) => source.id)).toEqual(["plaid:legacy-roth-linked"]);
+  });
+
+  it("keeps a distinct manual investment source when it does not duplicate the linked bucket total", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "1200",
+      }),
+      plaidInvestments: [
+        {
+          id: "roth-linked",
+          bucket: "roth",
+          institution: "Vanguard",
+          name: "Michael Roth IRA",
+          _plaidBalance: 6362.74,
+        },
+      ],
+    });
+
+    expect(sources.map((source) => source.id)).toEqual(["manual-balance:roth", "plaid:roth-linked"]);
+  });
+
+  it("does not assume a manual investment bucket exists when there is no real balance to include", () => {
+    const sources = buildInvestmentAuditSources({
+      trackingConfig: {
+        trackRoth: true,
+      },
+      form: createForm({
+        roth: "",
+      }),
+      plaidInvestments: [],
+      holdings: {},
+    });
+
+    expect(sources).toEqual([]);
   });
 });

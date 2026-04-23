@@ -75,6 +75,7 @@ export function CashAccountSection({
   const summaryPillHeight = isTablet ? 34 : 30;
   const summaryPillPadding = isNarrowPhone ? "0 10px" : "0 12px";
   const summaryMonoSize = isNarrowPhone ? 11.5 : 12.5;
+  const compactAdd = !isTablet;
 
   return (
     <Card
@@ -99,9 +100,9 @@ export function CashAccountSection({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gridTemplateColumns: "minmax(0, 1fr) auto auto",
           alignItems: "center",
-          gap: 12,
+          gap: 8,
           marginBottom: hasAccounts ? 8 : 6,
         }}
       >
@@ -132,7 +133,6 @@ export function CashAccountSection({
             alignItems: "center",
             gap: 8,
             flexShrink: 0,
-            justifyContent: "flex-end",
             whiteSpace: "nowrap",
           }}
         >
@@ -170,15 +170,16 @@ export function CashAccountSection({
               </Mono>
             </div>
           )}
-          <SectionAddControl
-            accent={toneColor}
-            buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}
-            options={addableOptions}
-            pickerLabel="Choose account to add"
-            placeholder="Select account…"
-            onSelect={onRestoreAccount}
-          />
         </div>
+        <SectionAddControl
+          accent={toneColor}
+          buttonAriaLabel={`Add ${title.toLowerCase()} to audit`}
+          options={addableOptions}
+          pickerLabel="Choose account to add"
+          placeholder="Select account…"
+          onSelect={onRestoreAccount}
+          iconOnly={compactAdd}
+        />
       </div>
 
       {hasAccounts ? (
