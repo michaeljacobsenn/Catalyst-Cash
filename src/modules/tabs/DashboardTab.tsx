@@ -153,22 +153,24 @@ export default memo(function DashboardTab({
   });
 
   // ── Setup Checklist ──
-  const hasCards = cards.length > 0;
+  const connectedAccountCount =
+    cards.length + bankAccounts.length + (Array.isArray(typedFinancialConfig?.plaidInvestments) ? typedFinancialConfig.plaidInvestments.length : 0);
+  const hasConnectedAccounts = connectedAccountCount > 0;
   const hasRenewals = (renewals || []).length > 0;
   const steps: DashboardSetupStep[] = [
     {
       id: "profile",
       title: "Configure Profile",
-      desc: "Income, zip code, and basic settings.",
+      desc: "Income, region, and weekly spending.",
       done: typedFinancialConfig?.paycheckStandard > 0 || typedFinancialConfig?.incomeSources?.length > 0,
       action: onGoSettings,
       Icon: Settings,
     },
     {
       id: "cards",
-      title: "Connect Accounts",
-      desc: "Securely link your banks via Plaid.",
-      done: hasCards,
+      title: "Add Accounts",
+      desc: "Link or enter banks, cards, and investments.",
+      done: hasConnectedAccounts,
       action: () => { setSetupReturnTab("dashboard"); navTo("portfolio"); },
       Icon: Building2,
     },

@@ -60,7 +60,7 @@ export const PLAN_DISPLAY = {
   free: {
     audits: `${FREE_AUDIT_LIMIT} audits / week`,
     chats: `${FREE_CHAT_LIMIT} AskAI / day`,
-    models: "Catalyst AI",
+    models: "OpenAI-powered Catalyst AI",
     plaid: `${INSTITUTION_LIMITS.free} Plaid institution`,
     history: `Last ${FREE_HISTORY_LIMIT} audits`,
   },

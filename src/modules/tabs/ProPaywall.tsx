@@ -640,7 +640,7 @@ export default function ProPaywall({ onClose, source = "default" }: ProPaywallPr
           >
             <Shield size={14} color="#E8A838" />
             <span style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45 }}>
-              One purchase, lifetime access. Pays for itself in under 16 months — then it&apos;s free forever. Every future feature included. Capped at 50 users.
+              One purchase, lifetime access. Pays for itself in under 16 months compared with monthly Pro. Every current Pro feature is included.
             </span>
           </div>
         )}

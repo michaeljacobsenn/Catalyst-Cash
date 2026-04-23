@@ -3,6 +3,7 @@ import { haptic } from "../../haptics.js";
 import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Loader2, TrendingUp, Zap } from "../../icons";
 import { Badge } from "../../ui.js";
 import { isLikelyNetworkError } from "../../networkErrors.js";
+import { getModelDisplayName } from "../../providers.js";
 
 interface ValidationIssue {
   message: string;
@@ -405,9 +406,8 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
 
   const modelLabel =
     chatQuota.modelId === "gpt-5-mini" ? "CFO" : chatQuota.modelId === "gpt-5-nano" ? "Nano" : chatQuota.modelId === "gpt-5.1" ? "Boardroom" : null;
-  const altLabel =
-    chatQuota.alternateModel === "gpt-5-mini" ? "Catalyst AI CFO" : chatQuota.alternateModel === "gpt-5-nano" ? "Catalyst AI" : null;
-  const altModelFull = chatQuota.alternateModel === "gpt-5-mini" ? "Catalyst AI CFO" : "Catalyst AI";
+  const modelFull = getModelDisplayName(chatQuota.modelId || "");
+  const altLabel = getModelDisplayName(chatQuota.alternateModel || "");
 
   // Only show if this is a Pro per-model quota
   if (!modelLabel) return null;
@@ -429,7 +429,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
       }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
-            {modelLabel === "CFO" ? "Catalyst AI CFO" : "Catalyst AI"} daily AskAI limit reached
+            {modelFull} daily AskAI limit reached
           </div>
           <div style={{ fontSize: 12, color: T.text.secondary }}>
             Switch to {altLabel} — {chatQuota.alternateRemaining} chats remaining today
@@ -463,7 +463,7 @@ export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: Mode
     return (
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: chatQuota.remaining <= 2 ? T.status.red : T.text.secondary }}>
-          {chatQuota.remaining} {altModelFull} AskAI chat{chatQuota.remaining === 1 ? "" : "s"} remaining today
+          {chatQuota.remaining} {modelFull} AskAI chat{chatQuota.remaining === 1 ? "" : "s"} remaining today
         </span>
       </div>
     );

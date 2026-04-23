@@ -73,8 +73,8 @@ export default function EmptyDashboard({ onRestore, onDemoAudit }: EmptyDashboar
     },
     {
       id: "cards",
-      title: "Connect Accounts",
-      desc: "Securely link banks, cards, and investment accounts.",
+      title: "Add Accounts",
+      desc: "Link or enter banks, cards, and investments.",
       done: hasConnectedAccounts,
       action: onGoCards,
       Icon: Building2,

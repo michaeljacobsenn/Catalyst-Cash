@@ -516,6 +516,7 @@ export default function SetupWizard() {
       };
       const merged = sanitizeManualInvestmentHoldings({ ...existing, ...payload, _fromSetupWizard: true }) as CatalystCashConfig;
       await db.set("financial-config", merged);
+      setFinancialConfig(merged);
       setActiveCurrencyCode(merged.currencyCode || "USD");
 
       if (bankAccounts.length > 0) {

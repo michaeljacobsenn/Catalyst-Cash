@@ -437,8 +437,8 @@ export default memo(function AuditTab({ proEnabled = false, privacyMode: _privac
               </div>
               <div style={{ fontSize: 10, color: T.text.dim, lineHeight: 1.35, marginTop: 2 }}>
                 {score >= 75
-                  ? "Pro gives you unlimited audits and the archive to prove your progress."
-                  : "Pro unlocks stronger AI models, more audits, and the tools to improve your score faster."}
+                  ? "Pro gives you 20 audits per month and the archive to prove your progress."
+                  : "Pro unlocks deeper AI, more audits, and the tools to improve your score faster."}
               </div>
             </div>
             <ChevronRight size={14} color={T.text.muted} />
