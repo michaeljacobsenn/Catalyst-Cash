@@ -7,13 +7,14 @@ export const VALID_PROVIDERS = ["gemini", "openai", "claude", "anthropic"];
 
 export const DEFAULTS = {
   gemini: "gemini-2.5-flash",
-  openai: "gpt-4.1",
+  openai: "gpt-5-mini",
   claude: "claude-haiku-4-5",
   anthropic: "claude-haiku-4-5",
 };
 
 function isReasoningModel(model = "") {
-  return String(model || "").startsWith("o");
+  const normalized = String(model || "");
+  return normalized.startsWith("o") || normalized.startsWith("gpt-5");
 }
 
 function resolveOutputBudget(provider, model, responseFormat) {
@@ -48,6 +49,16 @@ function extractHistoryText(entry) {
       .join("\n");
   }
   return "";
+}
+
+function normalizeOpenAIHistory(history = []) {
+  return history
+    .map((entry) => {
+      const role = entry?.role === "assistant" || entry?.role === "model" ? "assistant" : "user";
+      const content = extractHistoryText(entry);
+      return content ? { role, content } : null;
+    })
+    .filter(Boolean);
 }
 
 export async function callGemini(apiKey, { snapshot, systemPrompt, history, model, stream, responseFormat, timeoutMs = 240_000 }) {
@@ -115,7 +126,7 @@ export async function callOpenAI(apiKey, { snapshot, systemPrompt, history, mode
   const body = {
     model: m,
     stream: stream || false,
-    messages: [{ role: "system", content: systemPrompt }, ...(history || []), { role: "user", content: snapshot }],
+    messages: [{ role: "system", content: systemPrompt }, ...normalizeOpenAIHistory(history), { role: "user", content: snapshot }],
   };
 
   if (isReasoning) {
@@ -172,11 +183,10 @@ export async function routeOpenAIChatAction(
 ) {
   const requestedModel = model || DEFAULTS.openai;
   const routingModel = requestedModel.startsWith("o") ? DEFAULTS.openai : requestedModel;
+  const isReasoning = isReasoningModel(routingModel);
   const body = {
     model: routingModel,
     stream: false,
-    temperature: 0,
-    max_tokens: 300,
     messages: [
       {
         role: "system",
@@ -187,7 +197,7 @@ If the question mixes multiple themes, choose the primary action that should lea
 Prefer debt_paydown over card_selection when liquidity is tight or the user is clearly asking about payoff, APR, balances, or utilization.
 Return only the required tool call.`,
       },
-      ...history.slice(-6),
+      ...normalizeOpenAIHistory(history).slice(-6),
       { role: "user", content: snapshot },
     ],
     tools: [
@@ -243,6 +253,12 @@ Return only the required tool call.`,
       },
     },
   };
+  if (isReasoning) {
+    body.max_completion_tokens = 300;
+  } else {
+    body.temperature = 0;
+    body.max_tokens = 300;
+  }
 
   const res = await fetchWithTimeout(
     "https://api.openai.com/v1/chat/completions",

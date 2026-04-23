@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // Catalyst Cash — Cloudflare Worker AI Proxy
-// Multi-provider: Gemini (default), OpenAI, Claude
+// Multi-provider worker with an OpenAI-first production model lineup.
 // API keys stored as Cloudflare secrets — never exposed to clients.
 // ═══════════════════════════════════════════════════════════════
 
@@ -30,7 +30,16 @@ import {
   rotateIdentityDeviceKey,
   resolveAuthenticatedActor,
 } from "./lib/identitySession.js";
-import { getQuotaWindow, getModelQuotaWindow, getAuditModelQuotaWindow } from "./lib/quota.js";
+import {
+  FREE_MODEL_ID,
+  PRO_BOARDROOM_MODEL_ID,
+  PRO_PRIMARY_MODEL_ID,
+  PRO_VOLUME_MODEL_ID,
+  canonicalizeModelId,
+  getQuotaWindow,
+  getModelQuotaWindow,
+  getAuditModelQuotaWindow,
+} from "./lib/quota.js";
 import { buildHeaders, corsHeaders, fetchWithTimeout } from "./lib/http.js";
 import {
   DEFAULTS,
@@ -127,11 +136,11 @@ const PLAID_DEEP_SYNC_COOLDOWNS = {
   pro: 7 * 24 * 60 * 60 * 1000,
 };
 const MODEL_ALLOWLIST = {
-  free: new Set(["gemini-2.5-flash"]),
+  free: new Set([FREE_MODEL_ID]),
   pro: new Set([
-    "gemini-2.5-flash",
-    "gpt-4.1",
-    "o3",
+    PRO_PRIMARY_MODEL_ID,
+    PRO_VOLUME_MODEL_ID,
+    PRO_BOARDROOM_MODEL_ID,
   ]),
 };
 const DEFAULT_AUDIT_LOG_RETENTION_DAYS = 30;
@@ -863,14 +872,14 @@ function getPlaidCooldownMs(env, cooldowns, tierId) {
 }
 
 function getDefaultModelForTier(provider, tier) {
-  if (provider === "openai") return tier === "pro" ? "gpt-4.1" : DEFAULTS.gemini;
-  if (provider === "gemini") return "gemini-2.5-flash";
-  if (provider === "anthropic" || provider === "claude") return tier === "pro" ? "claude-haiku-4-5" : DEFAULTS.gemini;
-  return DEFAULTS[provider] || DEFAULTS.gemini;
+  if (provider === "openai") return tier === "pro" ? PRO_PRIMARY_MODEL_ID : FREE_MODEL_ID;
+  if (provider === "gemini") return FREE_MODEL_ID;
+  if (provider === "anthropic" || provider === "claude") return tier === "pro" ? "claude-haiku-4-5" : FREE_MODEL_ID;
+  return DEFAULTS[provider] || FREE_MODEL_ID;
 }
 
 function isModelAllowedForTier(model, tier) {
-  return MODEL_ALLOWLIST[tier]?.has(model);
+  return MODEL_ALLOWLIST[tier]?.has(canonicalizeModelId(model));
 }
 
 // ─── Rate Limiting (per-device, using Durable Objects) ─────────────
@@ -2265,8 +2274,14 @@ export default {
       );
     }
 
+    const requestedProviderForQuota = body.provider || "openai";
+    const requestedModelForQuota =
+      subscriptionTier === "pro"
+        ? canonicalizeModelId(body.model || getDefaultModelForTier(requestedProviderForQuota, subscriptionTier))
+        : FREE_MODEL_ID;
+
     // ─── Per-Model Rate Limit (Pro only) ──────────────────
-    const modelQuota = !testingBypass && isChat ? getModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    const modelQuota = !testingBypass && isChat ? getModelQuotaWindow(subscriptionTier, requestedModelForQuota) : null;
     if (modelQuota) {
       const modelLimitName = `${subscriptionTier}-${deviceId}-chat-${modelQuota.modelId}`;
       const modelId = env.RATE_LIMITER?.idFromName(modelLimitName);
@@ -2296,7 +2311,7 @@ export default {
     }
 
     // ─── Per-Model Audit Rate Limit (Pro only) ───────────────
-    const auditModelQuota = !testingBypass && !isChat ? getAuditModelQuotaWindow(subscriptionTier, body.model || "") : null;
+    const auditModelQuota = !testingBypass && !isChat ? getAuditModelQuotaWindow(subscriptionTier, requestedModelForQuota) : null;
     if (auditModelQuota && env.RATE_LIMITER) {
       const auditModelLimitName = `${subscriptionTier}-${deviceId}-audit-${auditModelQuota.modelId}`;
       const amId = env.RATE_LIMITER.idFromName(auditModelLimitName);
@@ -2334,7 +2349,7 @@ export default {
     }
 
     // ─── Resolve Provider ─────────────────────────────────
-    const requestedProvider = provider || "gemini";
+    const requestedProvider = provider || "openai";
     if (!VALID_PROVIDERS.includes(requestedProvider)) {
       return new Response(JSON.stringify({ error: "Invalid provider" }), {
         status: 400,
@@ -2342,15 +2357,13 @@ export default {
       });
     }
     let selectedProvider = requestedProvider;
-    let resolvedModel = model || getDefaultModelForTier(selectedProvider, subscriptionTier);
-    if (subscriptionTier !== "pro") {
-      selectedProvider = "gemini";
-      resolvedModel = "gemini-2.5-flash";
+    let resolvedModel = canonicalizeModelId(model || getDefaultModelForTier(selectedProvider, subscriptionTier));
+    if (resolvedModel.startsWith("gpt") || resolvedModel.startsWith("o")) {
+      selectedProvider = "openai";
     }
-    // o3 is a Pro reasoning model — remap chat requests to gpt-4.1 to keep costs bounded.
-    // Audit (one-shot) requests are allowed to use o3 directly when explicitly set.
-    if (resolvedModel === "o3" && isChat) {
-      resolvedModel = "gpt-4.1";
+    if (subscriptionTier !== "pro") {
+      selectedProvider = "openai";
+      resolvedModel = FREE_MODEL_ID;
     }
     if (!isModelAllowedForTier(resolvedModel, subscriptionTier)) {
       return new Response(

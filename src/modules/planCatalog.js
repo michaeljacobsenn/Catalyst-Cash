@@ -6,11 +6,17 @@ export const FREE_MARKET_REFRESH_MS = 60 * 60 * 1000;
 export const PRO_MONTHLY_AUDIT_CAP = 20;
 export const PRO_DAILY_CHAT_CAP = 30;
 
-// Per-model daily caps for Pro. GPT-4.1 and Gemini Flash share the 30-chat global budget
-// freely with no per-model wall between them. o3 (Boardroom) is sub-capped at 5/day —
-// those 5 count toward the 30 total, leaving up to 25 for GPT-4.1 + Gemini combined.
+export const FREE_MODEL_ID = "gpt-5-nano";
+export const PRO_PRIMARY_MODEL_ID = "gpt-5-mini";
+export const PRO_VOLUME_MODEL_ID = "gpt-5-nano";
+export const PRO_BOARDROOM_MODEL_ID = "gpt-5.1";
+
+// Per-model daily caps for Pro. The 30-chat global cap still applies; these
+// buckets keep premium OpenAI usage bounded while preserving a volume lane.
 export const PRO_MODEL_CAPS = {
-  "o3": 5,
+  [PRO_PRIMARY_MODEL_ID]: 15,
+  [PRO_VOLUME_MODEL_ID]: 15,
+  [PRO_BOARDROOM_MODEL_ID]: 5,
 };
 export const PRO_MARKET_REFRESH_MS = 5 * 60 * 1000;
 
@@ -20,8 +26,8 @@ export const INSTITUTION_LIMITS = {
 };
 
 export const TIER_MODEL_IDS = {
-  free: ["gemini-2.5-flash"],
-  pro: ["gpt-4.1", "gemini-2.5-flash", "o3"],
+  free: [FREE_MODEL_ID],
+  pro: [PRO_PRIMARY_MODEL_ID, PRO_VOLUME_MODEL_ID, PRO_BOARDROOM_MODEL_ID],
 };
 
 export const IAP_PRODUCTS = {

@@ -138,7 +138,7 @@ export const FULL_PROFILE_QA_STORAGE: BackupData = {
   "card-portfolio": FULL_PROFILE_QA_CARDS as unknown as BackupData[string],
   renewals: FULL_PROFILE_QA_RENEWALS as unknown as BackupData[string],
   "ai-provider": "backend",
-  "ai-model": "gemini-2.5-flash",
+  "ai-model": "gpt-5-nano",
   "ai-consent-accepted": true,
   "personal-rules": "Prioritize cash safety first, then highest-interest debt payoff.",
   "onboarding-complete": true,

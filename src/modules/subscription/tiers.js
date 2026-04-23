@@ -15,9 +15,12 @@ import {
   IAP_PRODUCTS,
   INSTITUTION_LIMITS,
   PRO_DAILY_CHAT_CAP,
+  PRO_BOARDROOM_MODEL_ID,
   PRO_MARKET_REFRESH_MS,
+  PRO_PRIMARY_MODEL_ID,
   PRO_MONTHLY_AUDIT_CAP,
   PRO_MODEL_CAPS,
+  PRO_VOLUME_MODEL_ID,
   TIER_MODEL_IDS,
 } from "../planCatalog.js";
 import { isGatingEnforced } from "./gating.js";
@@ -92,7 +95,10 @@ export const TIERS = {
 export { IAP_PRICING, IAP_PRODUCTS, INSTITUTION_LIMITS, PRO_DAILY_CHAT_CAP, PRO_MODEL_CAPS, PRO_MONTHLY_AUDIT_CAP };
 
 export function getAlternateProModel(modelId) {
-  return Object.keys(PRO_MODEL_CAPS).find((candidate) => candidate !== modelId) || null;
+  if (modelId === PRO_PRIMARY_MODEL_ID) return PRO_VOLUME_MODEL_ID;
+  if (modelId === PRO_VOLUME_MODEL_ID) return PRO_PRIMARY_MODEL_ID;
+  if (modelId === PRO_BOARDROOM_MODEL_ID) return PRO_PRIMARY_MODEL_ID;
+  return null;
 }
 
 export function getPreferredModelForTier(tierId = "free") {

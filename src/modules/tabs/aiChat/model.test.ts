@@ -16,17 +16,17 @@ import {
 
 describe("ai chat model", () => {
   it("normalizes the effective chat model", () => {
-    expect(getEffectiveChatModel("o3")).toBe("gpt-4.1");
-    expect(getEffectiveChatModel("gpt-4.1")).toBe("gpt-4.1");
-    expect(getEffectiveChatModel("gemini-2.5-flash")).toBe("gemini-2.5-flash");
+    expect(getEffectiveChatModel("o3")).toBe("gpt-5.1");
+    expect(getEffectiveChatModel("gpt-4.1")).toBe("gpt-5-mini");
+    expect(getEffectiveChatModel("gemini-2.5-flash")).toBe("gpt-5-nano");
   });
 
   it("maps chat models to stable display names and fallbacks", () => {
     expect(getChatModelDisplayName("gemini-2.5-flash")).toBe("Catalyst AI");
-    expect(getChatModelDisplayName("o3")).toBe("Catalyst AI CFO");
-    expect(getChatFallbackModel("gemini-2.5-flash", { proEnabled: true })).toBe("gpt-4.1");
-    expect(getChatFallbackModel("gpt-4.1", { proEnabled: true })).toBe("gemini-2.5-flash");
-    expect(getChatFallbackModels("o3", { proEnabled: true })).toEqual(["gemini-2.5-flash"]);
+    expect(getChatModelDisplayName("o3")).toBe("Catalyst AI Boardroom");
+    expect(getChatFallbackModel("gemini-2.5-flash", { proEnabled: true })).toBe("gpt-5-mini");
+    expect(getChatFallbackModel("gpt-4.1", { proEnabled: true })).toBe("gpt-5-nano");
+    expect(getChatFallbackModels("o3", { proEnabled: true })).toEqual(["gpt-5-mini", "gpt-5-nano"]);
     expect(getChatFallbackModel("gemini-2.5-flash", { proEnabled: false })).toBe(null);
   });
 

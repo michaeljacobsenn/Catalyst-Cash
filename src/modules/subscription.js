@@ -27,6 +27,7 @@ import {
   getUsageWindowKeys,
 } from "./subscription/windows.js";
 import { db } from "./utils.js";
+import { normalizeModelId } from "./providers.js";
 
 export {
   __setGatingModeForTests,
@@ -420,12 +421,13 @@ export async function recordAuditUsage() {
 }
 
 function buildProChatQuota(state, modelId) {
+  const effectiveModelId = normalizeModelId(modelId);
   const globalRemaining = Math.max(0, PRO_DAILY_CHAT_CAP - (state.chatMessagesToday || 0));
-  const modelCap = PRO_MODEL_CAPS[modelId];
-  const modelUsed = state.chatMessagesByModel?.[modelId] || 0;
+  const modelCap = PRO_MODEL_CAPS[effectiveModelId];
+  const modelUsed = state.chatMessagesByModel?.[effectiveModelId] || 0;
   const modelRemaining = Math.min(globalRemaining, Math.max(0, modelCap - modelUsed));
 
-  const alternateModelId = getAlternateProModel(modelId);
+  const alternateModelId = getAlternateProModel(effectiveModelId);
   const alternateCap = alternateModelId ? PRO_MODEL_CAPS[alternateModelId] || 0 : 0;
   const alternateUsed = alternateModelId ? state.chatMessagesByModel?.[alternateModelId] || 0 : 0;
   const alternateRemaining = Math.min(globalRemaining, Math.max(0, alternateCap - alternateUsed));
@@ -435,7 +437,7 @@ function buildProChatQuota(state, modelId) {
     remaining: modelRemaining,
     limit: Math.min(PRO_DAILY_CHAT_CAP, modelCap),
     used: modelUsed,
-    modelId,
+    modelId: effectiveModelId,
     alternateModel: alternateModelId || undefined,
     alternateRemaining: alternateModelId ? alternateRemaining : undefined,
   };
@@ -475,8 +477,9 @@ export async function checkChatQuota(modelId) {
   const state = await getSubscriptionState();
   const tier = TIERS[state.tier] || TIERS.free;
 
-  if (state.tier === "pro" && modelId && PRO_MODEL_CAPS[modelId] !== undefined) {
-    return buildProChatQuota(state, modelId);
+  const effectiveModelId = normalizeModelId(modelId);
+  if (state.tier === "pro" && effectiveModelId && PRO_MODEL_CAPS[effectiveModelId] !== undefined) {
+    return buildProChatQuota(state, effectiveModelId);
   }
 
   return buildStandardChatQuota(state, tier);
@@ -488,7 +491,8 @@ export async function recordChatUsage(modelId) {
   ensureChatUsageMap(state);
 
   if (modelId) {
-    state.chatMessagesByModel[modelId] = (state.chatMessagesByModel[modelId] || 0) + 1;
+    const effectiveModelId = normalizeModelId(modelId);
+    state.chatMessagesByModel[effectiveModelId] = (state.chatMessagesByModel[effectiveModelId] || 0) + 1;
   }
 
   await db.set(STATE_KEY, state);

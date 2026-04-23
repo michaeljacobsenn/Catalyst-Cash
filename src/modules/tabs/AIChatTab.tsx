@@ -290,12 +290,12 @@ export default memo(function AIChatTab({
         ? T.status.amber
         : T.accent.primary;
   const chatQuotaModelLabel =
-    chatQuota.modelId === "gpt-4.1"
+    chatQuota.modelId === "gpt-5-mini"
       ? "CFO"
-      : chatQuota.modelId === "gemini-2.5-flash"
-        ? "Flash"
-        : chatQuota.modelId === "o3"
-          ? "Reasoning"
+      : chatQuota.modelId === "gpt-5-nano"
+        ? "Nano"
+        : chatQuota.modelId === "gpt-5.1"
+          ? "Boardroom"
           : "AskAI";
   const chatQuotaStatusCopy =
     chatQuota.remaining === 0
@@ -1767,10 +1767,12 @@ export default memo(function AIChatTab({
             </span>
           ) : chatQuota.limit !== Infinity ? (
             <span style={{ opacity: 0.8 }}>
-              {chatQuota.modelId === "gpt-4.1"
+              {chatQuota.modelId === "gpt-5-mini"
                 ? "Catalyst AI CFO"
-                : chatQuota.modelId === "gemini-2.5-flash"
-                  ? "Catalyst AI Flash"
+                : chatQuota.modelId === "gpt-5-nano"
+                  ? "Catalyst AI"
+                  : chatQuota.modelId === "gpt-5.1"
+                    ? "Catalyst AI Boardroom"
                   : "Catalyst AI"}{" "}
               · daily quota active
             </span>
@@ -1805,10 +1807,10 @@ export default memo(function AIChatTab({
           }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
-                {chatQuota.modelId === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI"} daily limit reached
+                {getChatModelDisplayName(chatQuota.modelId || "")} daily limit reached
               </div>
               <div style={{ fontSize: 12, color: T.text.secondary }}>
-                Switch to {chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI"} — {chatQuota.alternateRemaining} chats remaining
+                Switch to {getChatModelDisplayName(chatQuota.alternateModel || "")} — {chatQuota.alternateRemaining} chats remaining
               </div>
             </div>
             <button type="button"

@@ -960,13 +960,15 @@ export function AuditProvider({ children }: AuditProviderProps) {
         const auditModelCap = (submitError as Record<string, unknown>)?.auditModelCapReached;
         if (auditModelCap && typeof auditModelCap === "string") {
           const AUDIT_FALLBACK: Record<string, string> = {
-            "gpt-4.1": "gemini-2.5-flash",
-            "gemini-2.5-flash": "gpt-4.1",
+            "gpt-5-mini": "gpt-5-nano",
+            "gpt-5-nano": "gpt-5-mini",
+            "gpt-5.1": "gpt-5-mini",
           };
           const nextModel = AUDIT_FALLBACK[auditModelCap];
           const modelNames: Record<string, string> = {
-            "gemini-2.5-flash": "Catalyst AI",
-            "gpt-4.1": "Catalyst AI CFO",
+            "gpt-5-nano": "Catalyst AI",
+            "gpt-5-mini": "Catalyst AI CFO",
+            "gpt-5.1": "Catalyst AI Boardroom",
           };
           if (nextModel) {
             (setAiModel as (m: string) => void)(nextModel);

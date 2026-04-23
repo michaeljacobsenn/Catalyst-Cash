@@ -64,16 +64,16 @@ describe("Tier Definitions", () => {
     expect(TIERS.free.auditsPerWeek).toBe(2);
     expect(TIERS.free.marketRefreshMs).toBe(60 * 60 * 1000); // 60 min
     expect(TIERS.free.historyLimit).toBe(12);
-    expect(TIERS.free.models).toEqual(["gemini-2.5-flash"]);
+    expect(TIERS.free.models).toEqual(["gpt-5-nano"]);
   });
 
   it("pro tier has unlimited access", () => {
     expect(TIERS.pro.auditsPerWeek).toBe(Infinity);
     expect(TIERS.pro.marketRefreshMs).toBe(5 * 60 * 1000); // 5 min
     expect(TIERS.pro.historyLimit).toBe(Infinity);
-    expect(TIERS.pro.models).toContain("gemini-2.5-flash");
-    expect(TIERS.pro.models).toContain("gpt-4.1");
-    expect(TIERS.pro.models).toContain("o3");
+    expect(TIERS.pro.models).toContain("gpt-5-nano");
+    expect(TIERS.pro.models).toContain("gpt-5-mini");
+    expect(TIERS.pro.models).toContain("gpt-5.1");
     expect(TIERS.pro.models).toHaveLength(3);
   });
 });
@@ -176,23 +176,23 @@ describe('Model Gating (launch mode "live")', () => {
     __setGatingModeForTests("live");
   });
 
-  it("normalizeModelForTier keeps free users on Flash and defaults Pro to GPT-4.1", () => {
-    expect(normalizeModelForTier("free", "gpt-4.1", "backend")).toBe("gemini-2.5-flash");
-    expect(normalizeModelForTier("free", null, "backend")).toBe("gemini-2.5-flash");
-    expect(normalizeModelForTier("pro", null, "backend")).toBe("gpt-4.1");
+  it("normalizeModelForTier keeps free users on nano and defaults Pro to GPT-5 mini", () => {
+    expect(normalizeModelForTier("free", "gpt-5-mini", "backend")).toBe("gpt-5-nano");
+    expect(normalizeModelForTier("free", null, "backend")).toBe("gpt-5-nano");
+    expect(normalizeModelForTier("pro", null, "backend")).toBe("gpt-5-mini");
   });
 
   it("unpaid users can access only the free model", async () => {
-    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
-    expect(await isModelAvailable("gpt-4.1")).toBe(false);
-    expect(await isModelAvailable("o3")).toBe(false);
+    expect(await isModelAvailable("gpt-5-nano")).toBe(true);
+    expect(await isModelAvailable("gpt-5-mini")).toBe(false);
+    expect(await isModelAvailable("gpt-5.1")).toBe(false);
   });
 
   it("pro user can access the curated premium lineup", async () => {
     await activatePro(IAP_PRODUCTS.monthly, 30);
-    expect(await isModelAvailable("gemini-2.5-flash")).toBe(true);
-    expect(await isModelAvailable("gpt-4.1")).toBe(true);
-    expect(await isModelAvailable("o3")).toBe(true);
+    expect(await isModelAvailable("gpt-5-nano")).toBe(true);
+    expect(await isModelAvailable("gpt-5-mini")).toBe(true);
+    expect(await isModelAvailable("gpt-5.1")).toBe(true);
   });
 });
 

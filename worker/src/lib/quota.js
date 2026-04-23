@@ -3,17 +3,35 @@ export const PRO_AUDITS_PER_MONTH = 20;
 export const FREE_CHATS_PER_DAY = 5;
 export const PRO_CHATS_PER_DAY = 30;
 
-// Per-model daily caps for Pro. GPT-4.1 and Gemini Flash share the 30-chat global budget
-// freely with no per-model wall between them. o3 (Boardroom) is sub-capped at 5/day —
-// those 5 count toward the 30 total, leaving up to 25 for GPT-4.1 + Gemini combined.
+export const FREE_MODEL_ID = "gpt-5-nano";
+export const PRO_PRIMARY_MODEL_ID = "gpt-5-mini";
+export const PRO_VOLUME_MODEL_ID = "gpt-5-nano";
+export const PRO_BOARDROOM_MODEL_ID = "gpt-5.1";
+
+const MODEL_ALIASES = {
+  "gemini-2.5-flash": PRO_VOLUME_MODEL_ID,
+  "gpt-4.1": PRO_PRIMARY_MODEL_ID,
+  "o3": PRO_BOARDROOM_MODEL_ID,
+};
+
+export function canonicalizeModelId(modelId) {
+  const normalized = String(modelId || "").trim();
+  return MODEL_ALIASES[normalized] || normalized;
+}
+
+// Per-model daily caps for Pro. The 30-chat global cap still applies; these
+// buckets keep premium OpenAI usage bounded while preserving a volume lane.
 export const PRO_MODEL_CAPS = {
-  "o3": 5,
+  [PRO_PRIMARY_MODEL_ID]: 15,
+  [PRO_VOLUME_MODEL_ID]: 15,
+  [PRO_BOARDROOM_MODEL_ID]: 5,
 };
 
 // Per-model monthly caps for Pro audits (must sum to PRO_AUDITS_PER_MONTH)
 export const PRO_MODEL_AUDIT_CAPS = {
-  "gpt-4.1": 10,
-  "gemini-2.5-flash": 10,
+  [PRO_PRIMARY_MODEL_ID]: 13,
+  [PRO_VOLUME_MODEL_ID]: 5,
+  [PRO_BOARDROOM_MODEL_ID]: 2,
 };
 
 /**
@@ -21,12 +39,13 @@ export const PRO_MODEL_AUDIT_CAPS = {
  * Returns null if no per-model cap applies (e.g. free tier).
  */
 export function getModelQuotaWindow(tier, modelId, now = new Date()) {
-  if (tier !== "pro" || !PRO_MODEL_CAPS[modelId]) return null;
+  const effectiveModelId = canonicalizeModelId(modelId);
+  if (tier !== "pro" || !PRO_MODEL_CAPS[effectiveModelId]) return null;
   return {
-    limit: PRO_MODEL_CAPS[modelId],
-    periodKey: `${now.toISOString().slice(0, 10)}:${modelId}`,
+    limit: PRO_MODEL_CAPS[effectiveModelId],
+    periodKey: `${now.toISOString().slice(0, 10)}:${effectiveModelId}`,
     resetAt: getNextUtcBoundary("day", now),
-    modelId,
+    modelId: effectiveModelId,
   };
 }
 
@@ -35,12 +54,13 @@ export function getModelQuotaWindow(tier, modelId, now = new Date()) {
  * Returns null if no per-model cap applies.
  */
 export function getAuditModelQuotaWindow(tier, modelId, now = new Date()) {
-  if (tier !== "pro" || !PRO_MODEL_AUDIT_CAPS[modelId]) return null;
+  const effectiveModelId = canonicalizeModelId(modelId);
+  if (tier !== "pro" || !PRO_MODEL_AUDIT_CAPS[effectiveModelId]) return null;
   return {
-    limit: PRO_MODEL_AUDIT_CAPS[modelId],
-    periodKey: `${now.toISOString().slice(0, 7)}:audit:${modelId}`,
+    limit: PRO_MODEL_AUDIT_CAPS[effectiveModelId],
+    periodKey: `${now.toISOString().slice(0, 7)}:audit:${effectiveModelId}`,
     resetAt: getNextUtcBoundary("month", now),
-    modelId,
+    modelId: effectiveModelId,
   };
 }
 

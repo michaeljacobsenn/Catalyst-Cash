@@ -122,7 +122,7 @@ function resolveProvider(model, fallbackProvider) {
   ) {
     return "openai";
   }
-  return normalizedFallback || "gemini";
+  return normalizedFallback || "openai";
 }
 
 async function* streamBackend(snapshot, model, context, history, deviceId, backendProvider, signal, responseFormat, requestType = "audit") {
@@ -331,21 +331,21 @@ export async function callAudit(
 }
 
 /**
- * Rapidly classify a merchant into a rewards category using gemini-2.5-flash.
+ * Rapidly classify a merchant into a rewards category using the low-cost OpenAI lane.
  * This uses the standard /audit backend but passes a targeted categorization prompt.
  */
 export async function classifyMerchant(merchantName) {
   try {
     const deviceId = await getOrCreateDeviceId();
     
-    // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
+    // We intentionally force GPT-5 nano for low-cost rapid classification.
     const rawJSON = await callBackend(
       merchantName, // "snapshot" becomes the user query
-      "gemini-2.5-flash",
+      "gpt-5-nano",
       { variant: "location-categorization" },
       [], // no history needed
       deviceId,
-      "gemini",
+      "openai",
       "json",
       "chat"
     );
@@ -378,7 +378,7 @@ export async function classifyMerchant(merchantName) {
 }
 
 /**
- * Batch classify multiple unknown merchant strings at once using gemini-2.5-flash.
+ * Batch classify multiple unknown merchant strings at once using the low-cost OpenAI lane.
  * @param {Array<string>} merchantNames - Array of raw merchant string descriptions.
  * @returns {Record<string, string>} Mapping of merchantName -> Category
  */
@@ -387,14 +387,14 @@ export async function batchCategorizeTransactions(merchantNames) {
   try {
     const deviceId = await getOrCreateDeviceId();
     
-    // We intentionally force Gemini Flash to keep costs near-zero for rapid classification.
+    // We intentionally force GPT-5 nano for low-cost rapid classification.
     const rawJSON = await callBackend(
       JSON.stringify(merchantNames), // User query is the array of strings
-      "gemini-2.5-flash",
+      "gpt-5-nano",
       { variant: "batch-categorization" },
       [], // no history needed
       deviceId,
-      "gemini",
+      "openai",
       "json",
       "chat"
     );

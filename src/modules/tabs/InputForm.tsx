@@ -267,7 +267,7 @@ export default function InputForm({
   }, []);
 
   const effectiveAuditModel = useMemo(
-    () => (aiModel === "gpt-4.1" || aiModel === "o3") ? "gpt-4.1" : (aiModel || "gpt-4.1"),
+    () => (aiModel === "gemini-2.5-flash" ? "gpt-5-nano" : aiModel === "gpt-4.1" ? "gpt-5-mini" : aiModel === "o3" ? "gpt-5.1" : (aiModel || "gpt-5-mini")),
     [aiModel]
   );
   type ChatQuotaState = { allowed: boolean; remaining: number; limit: number; used: number; modelId?: string; alternateModel?: string; alternateRemaining?: number; softBlocked?: boolean };

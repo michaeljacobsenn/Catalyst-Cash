@@ -671,7 +671,7 @@ export default function SettingsTab({
       setBankAccounts(FULL_PROFILE_QA_BANKS.map((account) => ({ ...account })));
       setRenewals(FULL_PROFILE_QA_RENEWALS.map((renewal) => ({ ...renewal })));
       setAiProvider("backend");
-      setAiModel("gemini-2.5-flash");
+      setAiModel("gpt-5-nano");
       setPersonalRules("Prioritize cash safety first, then highest-interest debt payoff.");
       await refreshLiabilities?.();
       window.toast?.success?.(`${FULL_PROFILE_QA_LABEL} loaded. Open Weekly Audit when you want to run the seeded flow.`);

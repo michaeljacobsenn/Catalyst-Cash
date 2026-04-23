@@ -1,4 +1,4 @@
-import { getModelDisplayName, getOperationalFallbackModels } from "../../providers.js";
+import { getModelDisplayName, getOperationalFallbackModels, normalizeModelId } from "../../providers.js";
 
 export type ChatFeedbackVerdict = "helpful" | "needs-work";
 export type ChatFeedbackReason = "too_generic" | "wrong_math" | "too_long" | "missed_context";
@@ -163,7 +163,7 @@ export function buildChatFeedbackProfile(
 }
 
 export function getEffectiveChatModel(aiModel: string): string {
-  return aiModel === "gpt-4.1" || aiModel === "o3" ? "gpt-4.1" : aiModel;
+  return normalizeModelId(aiModel || "gpt-5-mini");
 }
 
 export function getChatModelDisplayName(aiModel: string): string {

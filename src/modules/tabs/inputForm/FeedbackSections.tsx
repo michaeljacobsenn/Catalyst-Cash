@@ -403,9 +403,11 @@ export function AuditQuotaNotice({ auditQuota }: AuditQuotaNoticeProps) {
 export function ModelChatQuotaWidget({ chatQuota, setAiModel, proEnabled }: ModelChatQuotaWidgetProps) {
   if (!chatQuota || chatQuota.limit === Infinity || !proEnabled) return null;
 
-  const modelLabel = chatQuota.modelId === "gpt-4.1" ? "CFO" : chatQuota.modelId === "gemini-2.5-flash" ? "Flash" : null;
-  const altLabel = chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : chatQuota.alternateModel === "gemini-2.5-flash" ? "Catalyst AI" : null;
-  const altModelFull = chatQuota.alternateModel === "gpt-4.1" ? "Catalyst AI CFO" : "Catalyst AI";
+  const modelLabel =
+    chatQuota.modelId === "gpt-5-mini" ? "CFO" : chatQuota.modelId === "gpt-5-nano" ? "Nano" : chatQuota.modelId === "gpt-5.1" ? "Boardroom" : null;
+  const altLabel =
+    chatQuota.alternateModel === "gpt-5-mini" ? "Catalyst AI CFO" : chatQuota.alternateModel === "gpt-5-nano" ? "Catalyst AI" : null;
+  const altModelFull = chatQuota.alternateModel === "gpt-5-mini" ? "Catalyst AI CFO" : "Catalyst AI";
 
   // Only show if this is a Pro per-model quota
   if (!modelLabel) return null;

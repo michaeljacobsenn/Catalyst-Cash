@@ -1,11 +1,23 @@
 // ═══════════════════════════════════════════════════════════════
 // AI PROVIDER REGISTRY — Catalyst Cash
-// 3-model lineup, curated for margin discipline and CFO-grade output
-// Backend models: Gemini 2.5 Flash | GPT-4.1 | o3
+// OpenAI-only lineup, curated for launch reliability and margin discipline.
 // ═══════════════════════════════════════════════════════════════
 
-export const DEFAULT_FREE_MODEL_ID = "gemini-2.5-flash";
-export const DEFAULT_PRO_MODEL_ID = "gpt-4.1";
+import {
+  FREE_MODEL_ID,
+  PRO_BOARDROOM_MODEL_ID,
+  PRO_PRIMARY_MODEL_ID,
+  PRO_VOLUME_MODEL_ID,
+} from "./planCatalog.js";
+
+export const DEFAULT_FREE_MODEL_ID = FREE_MODEL_ID;
+export const DEFAULT_PRO_MODEL_ID = PRO_PRIMARY_MODEL_ID;
+
+const MODEL_ALIASES = {
+  "gemini-2.5-flash": PRO_VOLUME_MODEL_ID,
+  "gpt-4.1": PRO_PRIMARY_MODEL_ID,
+  "o3": PRO_BOARDROOM_MODEL_ID,
+};
 
 export const AI_PROVIDERS = [
   {
@@ -15,31 +27,31 @@ export const AI_PROVIDERS = [
     badge: "DEFAULT",
     models: [
       {
-        id: "gemini-2.5-flash",
+        id: PRO_VOLUME_MODEL_ID,
         name: "Catalyst AI",
-        note: "Fast, low-cost daily audit engine for the free tier and lightweight follow-up questions",
+        note: "Fast daily engine for free-tier guidance, categorization, and lightweight follow-up questions",
         tier: "free",
         badge: "FREE",
-        provider: "gemini",
-        poweredBy: "Google Gemini 2.5 Flash",
+        provider: "openai",
+        poweredBy: "OpenAI GPT-5 nano",
       },
       {
-        id: "gpt-4.1",
+        id: PRO_PRIMARY_MODEL_ID,
         name: "Catalyst AI CFO",
         note: "Default Pro engine for CFO-grade audits, high-context planning, and premium day-to-day guidance",
         tier: "pro",
         badge: "PRO",
         provider: "openai",
-        poweredBy: "OpenAI GPT-4.1",
+        poweredBy: "OpenAI GPT-5 mini",
       },
       {
-        id: "o3",
+        id: PRO_BOARDROOM_MODEL_ID,
         name: "Catalyst AI Boardroom",
         note: "Escalation-only reasoning for insolvency risk, tax complexity, promo APR cliffs, and edge-case tradeoffs",
         tier: "pro",
         badge: "DEEP",
         provider: "openai",
-        poweredBy: "OpenAI o3",
+        poweredBy: "OpenAI GPT-5.1",
       },
     ],
     defaultModel: DEFAULT_PRO_MODEL_ID,
@@ -62,8 +74,9 @@ export function isModelSelectable(model) {
 
 export function getModel(providerId, modelId) {
   const provider = getProvider(providerId);
+  const canonicalModelId = normalizeModelId(modelId);
   return (
-    provider.models.find(m => m.id === modelId && isModelSelectable(m)) ||
+    provider.models.find(m => m.id === canonicalModelId && isModelSelectable(m)) ||
     provider.models.find(isModelSelectable) ||
     provider.models[0]
   );
@@ -75,25 +88,30 @@ export function getDefaultModelIdForTier(tierId) {
 
 /**
  * For backend provider, resolve which Worker provider to route to.
- * e.g. "gemini-2.5-flash" → "gemini", "gpt-4.1" → "openai"
+ * e.g. "gpt-5-nano" → "openai", legacy Gemini/GPT-4.1 IDs are aliased.
  */
 export function getBackendProvider(modelId) {
   const backend = getProvider("backend");
-  const model = backend.models.find(m => m.id === modelId);
-  return model?.provider || "gemini";
+  const model = backend.models.find(m => m.id === normalizeModelId(modelId));
+  return model?.provider || "openai";
 }
 
 export function getModelDisplayName(modelId) {
   const backend = getProvider("backend");
-  const model = backend.models.find(m => m.id === modelId);
+  const model = backend.models.find(m => m.id === normalizeModelId(modelId));
   return model?.name || String(modelId || "Catalyst AI");
 }
 
-export function getOperationalFallbackModels(modelId) {
+export function normalizeModelId(modelId) {
   const normalized = String(modelId || "").trim();
-  if (normalized === "gemini-2.5-flash") return ["gpt-4.1"];
-  if (normalized === "gpt-4.1") return ["gemini-2.5-flash"];
-  if (normalized === "o3") return ["gpt-4.1", "gemini-2.5-flash"];
+  return MODEL_ALIASES[normalized] || normalized;
+}
+
+export function getOperationalFallbackModels(modelId) {
+  const normalized = normalizeModelId(modelId);
+  if (normalized === PRO_VOLUME_MODEL_ID) return [PRO_PRIMARY_MODEL_ID];
+  if (normalized === PRO_PRIMARY_MODEL_ID) return [PRO_VOLUME_MODEL_ID];
+  if (normalized === PRO_BOARDROOM_MODEL_ID) return [PRO_PRIMARY_MODEL_ID, PRO_VOLUME_MODEL_ID];
   return [];
 }
 
@@ -102,6 +120,6 @@ export function getOperationalFallbackModels(modelId) {
  */
 export function isProModel(modelId) {
   const backend = getProvider("backend");
-  const model = backend.models.find(m => m.id === modelId);
+  const model = backend.models.find(m => m.id === normalizeModelId(modelId));
   return model?.tier === "pro";
 }

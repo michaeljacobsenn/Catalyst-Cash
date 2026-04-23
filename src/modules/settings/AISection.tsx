@@ -294,7 +294,7 @@ export default function AISection({
               <div style={{ fontSize: 11, color: T.text.dim, marginTop: 6, lineHeight: 1.45 }}>
                 {showUpgradeCta
                   ? "Free includes Catalyst AI automatically. Upgrade to unlock Catalyst AI CFO and Boardroom reasoning."
-                  : "Pro includes three curated engines: Free-speed Flash, default CFO, and deep-reasoning Boardroom."}
+                  : "Pro includes three curated OpenAI engines: Nano for volume, CFO for default planning, and Boardroom for deep reasoning."}
               </div>
             </div>
             {showUpgradeCta ? (
