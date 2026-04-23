@@ -314,85 +314,165 @@ export function DebtBalancesSection({
                   )}
                 </div>
 
-                <div
-                  style={
-                    isCardSelected
-                      ? {
-                          minWidth: 0,
-                          maxWidth: isNarrowPhone ? 210 : undefined,
-                          gridColumn: isNarrowPhone ? "1 / 2" : undefined,
-                          gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                          alignSelf: "center",
-                        }
-                      : {
-                          minWidth: 0,
-                          gridColumn: isNarrowPhone ? "1 / -1" : "1 / 3",
-                          gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                        }
-                  }
-                >
-                  {hasLiveBalance && !isOverridden ? (
-                    <button type="button"
-                      onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
+                {isNarrowPhone && isCardSelected ? (
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-end",
+                      gap: 8,
+                      minWidth: 0,
+                    }}
+                  >
+                    {hasLiveBalance && !isOverridden ? (
+                      <button
+                        type="button"
+                        onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: 132,
+                          minHeight: rowActionSize + 2,
+                          background: `${T.status.red}0C`,
+                          border: `1px solid ${T.status.red}30`,
+                          borderRadius: T.radius.md,
+                          padding: "0 14px",
+                          transition:
+                            "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Mono size={12.5} weight={800} color={T.status.red}>
+                          {fmt(liveBalance)}
+                        </Mono>
+                      </button>
+                    ) : isOverridden && hasLiveBalance && debt.cardId ? (
+                      <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                        <InlineOverrideMoneyInput
+                          label={`Debt balance ${index + 1}`}
+                          value={debt.balance}
+                          onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
+                          placeholder={`${fmt(liveBalance)}`}
+                          tone="danger"
+                          onReset={() => onResetDebtOverride(index, debt.cardId, liveBalance)}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                        <DI
+                          value={debt.balance}
+                          onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
+                          placeholder={hasLiveBalance ? `${fmt(liveBalance)}` : "0.00"}
+                        />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onRemoveDebtRow(index)}
                       style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: T.status.redDim,
+                        color: T.status.red,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        width: isNarrowPhone ? "fit-content" : "100%",
-                        minWidth: isNarrowPhone ? 132 : undefined,
-                        maxWidth: isNarrowPhone ? "100%" : undefined,
-                        minHeight: rowActionSize + 2,
-                        background: `${T.status.red}0C`,
-                        border: `1px solid ${T.status.red}30`,
-                        borderRadius: T.radius.md,
-                        padding: "0 12px",
-                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
-                        justifySelf: isNarrowPhone ? "start" : undefined,
+                        flexShrink: 0,
                       }}
                     >
-                      <Mono size={12.5} weight={800} color={T.status.red}>
-                        {fmt(liveBalance)}
-                      </Mono>
+                      <Trash2 size={11} />
                     </button>
-                  ) : isOverridden && hasLiveBalance && debt.cardId ? (
-                    <InlineOverrideMoneyInput
-                      label={`Debt balance ${index + 1}`}
-                      value={debt.balance}
-                      onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
-                      placeholder={`${fmt(liveBalance)}`}
-                      tone="danger"
-                      onReset={() => onResetDebtOverride(index, debt.cardId, liveBalance)}
-                    />
-                  ) : (
-                    <DI
-                      value={debt.balance}
-                      onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
-                      placeholder={hasLiveBalance ? `${fmt(liveBalance)}` : "0.00"}
-                    />
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      style={
+                        isCardSelected
+                          ? {
+                              minWidth: 0,
+                              maxWidth: isNarrowPhone ? 210 : undefined,
+                              gridColumn: isNarrowPhone ? "1 / 2" : undefined,
+                              gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                              alignSelf: "center",
+                            }
+                          : {
+                              minWidth: 0,
+                              gridColumn: isNarrowPhone ? "1 / -1" : "1 / 3",
+                              gridRow: isNarrowPhone ? "2 / 3" : undefined,
+                            }
+                      }
+                    >
+                      {hasLiveBalance && !isOverridden ? (
+                        <button
+                          type="button"
+                          onClick={() => debt.cardId && onEnableDebtOverride(debt.cardId)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: isNarrowPhone ? "fit-content" : "100%",
+                            minWidth: isNarrowPhone ? 132 : undefined,
+                            maxWidth: isNarrowPhone ? "100%" : undefined,
+                            minHeight: rowActionSize + 2,
+                            background: `${T.status.red}0C`,
+                            border: `1px solid ${T.status.red}30`,
+                            borderRadius: T.radius.md,
+                            padding: "0 12px",
+                            transition:
+                              "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                            justifySelf: isNarrowPhone ? "start" : undefined,
+                          }}
+                        >
+                          <Mono size={12.5} weight={800} color={T.status.red}>
+                            {fmt(liveBalance)}
+                          </Mono>
+                        </button>
+                      ) : isOverridden && hasLiveBalance && debt.cardId ? (
+                        <InlineOverrideMoneyInput
+                          label={`Debt balance ${index + 1}`}
+                          value={debt.balance}
+                          onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
+                          placeholder={`${fmt(liveBalance)}`}
+                          tone="danger"
+                          onReset={() => onResetDebtOverride(index, debt.cardId, liveBalance)}
+                        />
+                      ) : (
+                        <DI
+                          value={debt.balance}
+                          onChange={(event) => onChangeDebtBalance(index, sanitizeDollar(event.target.value))}
+                          placeholder={hasLiveBalance ? `${fmt(liveBalance)}` : "0.00"}
+                        />
+                      )}
+                    </div>
 
-                <button type="button"
-                  onClick={() => onRemoveDebtRow(index)}
-                  style={{
-                    width: rowActionSize,
-                    height: rowActionSize,
-                    borderRadius: T.radius.sm,
-                    border: "none",
-                    background: T.status.redDim,
-                    color: T.status.red,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    justifySelf: isNarrowPhone ? "end" : "stretch",
-                    gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                    gridRow: isNarrowPhone ? (isCardSelected ? "2 / 3" : "1 / 2") : undefined,
-                    alignSelf: "center",
-                  }}
-                >
-                  <Trash2 size={11} />
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveDebtRow(index)}
+                      style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: T.status.redDim,
+                        color: T.status.red,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        justifySelf: isNarrowPhone ? "end" : "stretch",
+                        gridColumn: isNarrowPhone ? "2 / 3" : undefined,
+                        gridRow: isNarrowPhone ? (isCardSelected ? "2 / 3" : "1 / 2") : undefined,
+                        alignSelf: "center",
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}

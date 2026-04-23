@@ -240,72 +240,125 @@ export function CashAccountSection({
                   </div>
                 </div>
 
-                {isOverridden ? (
+                {isNarrowPhone ? (
                   <div
                     style={{
-                      minWidth: 0,
-                      maxWidth: isNarrowPhone ? 210 : undefined,
-                      gridColumn: isNarrowPhone ? "1 / 2" : undefined,
-                      gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                      alignSelf: "center",
-                    }}
-                  >
-                    <InlineOverrideMoneyInput
-                      label={`${account.displayLabel} override`}
-                      value={overrideValue}
-                      onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
-                      placeholder={fmt(account.amount)}
-                      onReset={() => onResetAccount(account.id)}
-                    />
-                  </div>
-                ) : (
-                  <button type="button"
-                    onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
-                    style={{
+                      gridColumn: "1 / -1",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      width: isNarrowPhone ? "fit-content" : "100%",
-                      minWidth: isNarrowPhone ? 132 : undefined,
-                      maxWidth: isNarrowPhone ? "100%" : undefined,
-                      minHeight: rowActionSize + 2,
-                      background: `${toneColor}0C`,
-                      border: `1px solid ${toneColor}30`,
-                      borderRadius: T.radius.md,
-                      padding: "0 12px",
-                      flexShrink: 0,
-                      gridColumn: isNarrowPhone ? "1 / 2" : undefined,
-                      gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                      justifySelf: isNarrowPhone ? "start" : undefined,
-                      transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                      justifyContent: "flex-end",
+                      gap: 8,
+                      minWidth: 0,
                     }}
                   >
-                    <Mono size={12.5} weight={800} color={toneColor}>
-                      {fmt(account.amount)}
-                    </Mono>
-                  </button>
+                    {isOverridden ? (
+                      <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                        <InlineOverrideMoneyInput
+                          label={`${account.displayLabel} override`}
+                          value={overrideValue}
+                          onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
+                          placeholder={fmt(account.amount)}
+                          onReset={() => onResetAccount(account.id)}
+                        />
+                      </div>
+                    ) : (
+                      <button type="button"
+                        onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "fit-content",
+                          minWidth: 132,
+                          minHeight: rowActionSize + 2,
+                          background: `${toneColor}0C`,
+                          border: `1px solid ${toneColor}30`,
+                          borderRadius: T.radius.md,
+                          padding: "0 14px",
+                          flexShrink: 0,
+                          transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        }}
+                      >
+                        <Mono size={12.5} weight={800} color={toneColor}>
+                          {fmt(account.amount)}
+                        </Mono>
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => onRemoveAccount(account.id)}
+                      style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: `${toneColor}14`,
+                        color: toneColor,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {isOverridden ? (
+                      <div
+                        style={{
+                          minWidth: 0,
+                        }}
+                      >
+                        <InlineOverrideMoneyInput
+                          label={`${account.displayLabel} override`}
+                          value={overrideValue}
+                          onChange={(event) => onOverrideAccount(account.id, sanitizeDollar(event.target.value))}
+                          placeholder={fmt(account.amount)}
+                          onReset={() => onResetAccount(account.id)}
+                        />
+                      </div>
+                    ) : (
+                      <button type="button"
+                        onClick={() => onOverrideAccount(account.id, "" as MoneyInput)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "100%",
+                          minHeight: rowActionSize + 2,
+                          background: `${toneColor}0C`,
+                          border: `1px solid ${toneColor}30`,
+                          borderRadius: T.radius.md,
+                          padding: "0 12px",
+                          flexShrink: 0,
+                          transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        }}
+                      >
+                        <Mono size={12.5} weight={800} color={toneColor}>
+                          {fmt(account.amount)}
+                        </Mono>
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => onRemoveAccount(account.id)}
+                      style={{
+                        width: rowActionSize,
+                        height: rowActionSize,
+                        borderRadius: T.radius.sm,
+                        border: "none",
+                        background: `${toneColor}14`,
+                        color: toneColor,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </>
                 )}
-                <button type="button"
-                  onClick={() => onRemoveAccount(account.id)}
-                  style={{
-                    width: rowActionSize,
-                    height: rowActionSize,
-                    borderRadius: T.radius.sm,
-                    border: "none",
-                    background: `${toneColor}14`,
-                    color: toneColor,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                    justifySelf: "end",
-                    alignSelf: "center",
-                  }}
-                >
-                  <Trash2 size={11} />
-                </button>
               </div>
             );
           })}

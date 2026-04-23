@@ -216,69 +216,118 @@ export function InvestmentBalancesSection({
                   </div>
                 </div>
               </div>
-              {showManualInput ? (
+              {isNarrowPhone ? (
                 <div
                   style={{
-                    minWidth: 0,
-                    maxWidth: isNarrowPhone ? 210 : undefined,
-                    gridColumn: isNarrowPhone ? "1 / 2" : undefined,
-                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                    alignSelf: "center",
-                  }}
-                >
-                  <DI
-                    value={inputValue}
-                    onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
-                    placeholder="Enter value"
-                  />
-                </div>
-              ) : (
-                <div
-                  style={{
+                    gridColumn: "1 / -1",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    width: isNarrowPhone ? "fit-content" : "100%",
-                    minWidth: isNarrowPhone ? 132 : undefined,
-                    maxWidth: isNarrowPhone ? "100%" : undefined,
-                    minHeight: rowActionSize + 2,
-                    background: `${source.accent}0C`,
-                    border: `1px solid ${source.accent}30`,
-                    borderRadius: T.radius.md,
-                    padding: "0 12px",
-                    gridColumn: isNarrowPhone ? "1 / 2" : undefined,
-                    gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                    justifySelf: isNarrowPhone ? "start" : undefined,
-                    transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
-                    flexShrink: 0,
+                    justifyContent: "flex-end",
+                    gap: 8,
+                    minWidth: 0,
                   }}
                 >
-                  <Mono size={12.5} weight={800} color={source.accent}>
-                    {fmt(resolvedDisplayValue)}
-                  </Mono>
+                  {showManualInput ? (
+                    <div style={{ flex: "0 1 208px", minWidth: 0, maxWidth: 208 }}>
+                      <DI
+                        value={inputValue}
+                        onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
+                        placeholder="Enter value"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minWidth: 132,
+                        minHeight: rowActionSize + 2,
+                        background: `${source.accent}0C`,
+                        border: `1px solid ${source.accent}30`,
+                        borderRadius: T.radius.md,
+                        padding: "0 14px",
+                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Mono size={12.5} weight={800} color={source.accent}>
+                        {fmt(resolvedDisplayValue)}
+                      </Mono>
+                    </div>
+                  )}
+                  <button type="button"
+                    onClick={() => onRemoveSource(source.id)}
+                    style={{
+                      width: rowActionSize,
+                      height: rowActionSize,
+                      borderRadius: T.radius.sm,
+                      border: "none",
+                      background: `${source.accent}14`,
+                      color: source.accent,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </div>
+              ) : (
+                <>
+                  {showManualInput ? (
+                    <div
+                      style={{
+                        minWidth: 0,
+                      }}
+                    >
+                      <DI
+                        value={inputValue}
+                        onChange={(event) => onChangeField(source.formKey as "roth" | "brokerage" | "k401Balance", sanitizeDollar(event.target.value))}
+                        placeholder="Enter value"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        minHeight: rowActionSize + 2,
+                        background: `${source.accent}0C`,
+                        border: `1px solid ${source.accent}30`,
+                        borderRadius: T.radius.md,
+                        padding: "0 12px",
+                        transition: "transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Mono size={12.5} weight={800} color={source.accent}>
+                        {fmt(resolvedDisplayValue)}
+                      </Mono>
+                    </div>
+                  )}
+                  <button type="button"
+                    onClick={() => onRemoveSource(source.id)}
+                    style={{
+                      width: rowActionSize,
+                      height: rowActionSize,
+                      borderRadius: T.radius.sm,
+                      border: "none",
+                      background: `${source.accent}14`,
+                      color: source.accent,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </>
               )}
-              <button type="button"
-                onClick={() => onRemoveSource(source.id)}
-                style={{
-                  width: rowActionSize,
-                  height: rowActionSize,
-                  borderRadius: T.radius.sm,
-                  border: "none",
-                  background: `${source.accent}14`,
-                  color: source.accent,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  gridColumn: isNarrowPhone ? "2 / 3" : undefined,
-                  gridRow: isNarrowPhone ? "2 / 3" : undefined,
-                  justifySelf: "end",
-                  alignSelf: "center",
-                }}
-              >
-                <Trash2 size={11} />
-              </button>
             </div>
           );
         })}

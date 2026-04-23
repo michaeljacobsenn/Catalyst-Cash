@@ -1062,22 +1062,6 @@ export default function InputForm({
           </div>
         )}
 
-        {showInvestmentSection && (
-          <InvestmentBalancesSection
-            visibleSources={visibleInvestmentSources}
-            hiddenSources={hiddenInvestmentSources}
-            totalBalance={visibleInvestmentTotal}
-            formValues={{
-              roth: form.roth,
-              brokerage: form.brokerage,
-              k401Balance: form.k401Balance,
-            }}
-            onChangeField={changeInvestmentField}
-            onRemoveSource={removeInvestmentSource}
-            onRestoreSource={restoreInvestmentSource}
-          />
-        )}
-
         <DebtBalancesSection
           debts={form.debts}
           hasAvailableCards={(cards || []).length > 0}
@@ -1093,6 +1077,22 @@ export default function InputForm({
           onResetDebtOverride={resetDebtOverride}
           onChangeDebtBalance={(index, value) => sD(index, "balance", value)}
         />
+
+        {showInvestmentSection && (
+          <InvestmentBalancesSection
+            visibleSources={visibleInvestmentSources}
+            hiddenSources={hiddenInvestmentSources}
+            totalBalance={visibleInvestmentTotal}
+            formValues={{
+              roth: form.roth,
+              brokerage: form.brokerage,
+              k401Balance: form.k401Balance,
+            }}
+            onChangeField={changeInvestmentField}
+            onRemoveSource={removeInvestmentSource}
+            onRestoreSource={restoreInvestmentSource}
+          />
+        )}
       </div>
       <PendingChargesSection
         pendingCharges={form.pendingCharges || []}
