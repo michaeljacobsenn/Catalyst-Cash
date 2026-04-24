@@ -25,6 +25,12 @@ describe("cloudSync module", () => {
     expect(source).toContain("isEncrypted(data)");
   });
 
+  it("can inspect encrypted iCloud backups without logging them as failed restores", async () => {
+    const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
+    expect(source).toContain("inspectICloudBackup");
+    expect(source).toContain('reason: "passphrase-required"');
+  });
+
   it("encryption requires passphrase — guards against null passphrase encrypt", async () => {
     const source = await import("fs").then(fs => fs.readFileSync(new URL("./cloudSync.js", import.meta.url), "utf-8"));
     // The upload function must reject missing passphrases before encrypting

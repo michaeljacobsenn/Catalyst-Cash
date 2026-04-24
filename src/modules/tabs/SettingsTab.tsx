@@ -242,12 +242,12 @@ export default function SettingsTab({
   }, [refreshRecoveryVaultLinkState]);
 
   // ── Auto-backup scheduling ──────────────────────────────────
-  // When Apple Sign-In is linked and an auto-backup interval is
-  // configured, check on mount and periodically whether enough
-  // time has elapsed since the last backup. If so, trigger a
-  // silent iCloud backup in the background.
+  // When an iCloud auto-backup interval is configured, check on
+  // mount and periodically whether enough time has elapsed since
+  // the last backup. This uses the device's iCloud account; Apple
+  // Sign-In is only for account-backed recovery features.
   useEffect(() => {
-    if (!appleLinkedId || autoBackupInterval === "off") return;
+    if (autoBackupInterval === "off") return;
 
     const checkAndBackup = async () => {
       try {
@@ -282,7 +282,7 @@ export default function SettingsTab({
     // once the interval elapses.
     const timer = setInterval(checkAndBackup, 60 * 1000);
     return () => clearInterval(timer);
-  }, [appleLinkedId, autoBackupInterval, appPasscode, personalRules]);
+  }, [autoBackupInterval, appPasscode, personalRules]);
 
   const handleAppleSignIn = async () => {
     if (Capacitor.getPlatform() === "web") {
@@ -1244,6 +1244,7 @@ export default function SettingsTab({
             hsInputPasscode={hsInputPasscode}
             setHsInputPasscode={setHsInputPasscode}
             appleLinkedId={appleLinkedId}
+            appPasscode={appPasscode}
             handleAppleSignIn={handleAppleSignIn}
             unlinkApple={unlinkApple}
             autoBackupInterval={autoBackupInterval}

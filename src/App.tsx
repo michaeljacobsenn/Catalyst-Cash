@@ -24,6 +24,7 @@
     useAppForegroundRefresh,
     useDeepLinkRouting,
   } from "./modules/appShell/useAppShellRuntime.js";
+  import FirstRunRestoreGate from "./modules/appShell/FirstRunRestoreGate.js";
   import { refreshAppState as refreshAppStateModel,resetAppState } from "./modules/appRefreshModel.js";
   import { applyManualMoveCompletion } from "./modules/manualMoveCompletion.js";
   import { getMoveAssignmentOptions } from "./modules/moveSemantics.js";
@@ -102,10 +103,12 @@ function CatalystCashShell() {
 
   const {
     appPasscode,
+    setAppPasscode,
+    setRequireAuth,
     isLocked,
+    setIsLocked,
     privacyMode,
     setPrivacyMode,
-    appleLinkedId,
     isSecurityReady,
     rehydrateSecurity,
   } = useSecurity();
@@ -370,7 +373,6 @@ function CatalystCashShell() {
   );
   useAutoICloudBackup({
     ready,
-    appleLinkedId,
     autoBackupInterval,
     history,
     renewals,
@@ -748,9 +750,16 @@ function CatalystCashShell() {
     return (
       <>
         <GlobalStyles />
-        <Suspense fallback={<TabFallback />}>
-          <SetupWizard />
-        </Suspense>
+        <FirstRunRestoreGate
+          onRestoreComplete={() => refreshAppState("dashboard")}
+          setAppPasscode={setAppPasscode}
+          setRequireAuth={setRequireAuth}
+          setIsLocked={setIsLocked}
+        >
+          <Suspense fallback={<TabFallback />}>
+            <SetupWizard />
+          </Suspense>
+        </FirstRunRestoreGate>
       </>
     );
 

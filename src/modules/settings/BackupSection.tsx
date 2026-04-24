@@ -20,6 +20,7 @@ export default function BackupSection({ activeMenu, ...props }) {
     householdId,
     setShowHouseholdModal,
     appleLinkedId,
+    appPasscode,
     secretStorageStatus,
     handleAppleSignIn,
     unlinkApple,
@@ -127,11 +128,13 @@ export default function BackupSection({ activeMenu, ...props }) {
     : "No encrypted export saved yet.";
   const autoBackupStatus = !cloudBackupSupported
     ? "Automatic iCloud backup is available in the native iPhone app only."
-    : appleLinkedId
-      ? lastBackupTS
-        ? `Last iCloud backup ${new Date(lastBackupTS).toLocaleString()}.`
-        : "Connected. First iCloud backup is pending."
-      : "Not connected yet.";
+    : !appPasscode
+      ? "Set an App Passcode first so Catalyst can encrypt iCloud backups."
+    : lastBackupTS
+      ? `Last iCloud backup ${new Date(lastBackupTS).toLocaleString()}.`
+      : autoBackupInterval !== "off"
+        ? "Enabled. Catalyst will save the first encrypted iCloud backup when data changes."
+        : "Ready. Set an App Passcode, then choose a schedule to enable encrypted iCloud backup.";
   const recoveryVaultLastSyncLabel = recoveryVaultLastSyncTs
     ? new Date(recoveryVaultLastSyncTs).toLocaleString()
     : null;
@@ -245,35 +248,39 @@ export default function BackupSection({ activeMenu, ...props }) {
                   lineHeight: 1.5,
                 }}
               >
-                Use encrypted export files on web. iCloud backup and Apple Sign-In stay limited to the native iPhone app.
+                Use encrypted export files on web. iCloud backup and account restore stay limited to the native iPhone app.
               </div>
-            ) : appleLinkedId ? (
+            ) : (
               <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
                 <div style={{ display: "flex", alignItems: isNarrowPhone ? "stretch" : "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", flexDirection: isNarrowPhone ? "column" : "row" }}>
                   <div style={{ fontSize: 11, color: T.text.dim, lineHeight: 1.5 }}>
                     {lastBackupTS
                       ? `Last iCloud backup: ${new Date(lastBackupTS).toLocaleString()}`
-                      : "Connected. Waiting for the first iCloud backup."}
+                      : autoBackupInterval !== "off"
+                        ? "Waiting for the first encrypted iCloud backup."
+                        : "Uses this iPhone's iCloud account. Apple Sign-In is not required."}
                   </div>
-                  <button type="button"
-                    onClick={unlinkApple}
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: T.radius.md,
-                      border: `1px solid ${T.border.default}`,
-                      background: "transparent",
-                      color: T.text.secondary,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Unlink
-                  </button>
+                  {appleLinkedId && (
+                    <button type="button"
+                      onClick={unlinkApple}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: T.radius.md,
+                        border: `1px solid ${T.border.default}`,
+                        background: "transparent",
+                        color: T.text.secondary,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Unlink Apple Account Restore
+                    </button>
+                  )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", gap: 10, alignItems: "center" }}>
                   <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.55 }}>
-                    Catalyst keeps the latest encrypted iCloud backup plus recent snapshots in your private iCloud Drive.
+                    Catalyst keeps an encrypted backup in your private iCloud Drive. A new iPhone on the same Apple ID can auto-detect it before setup.
                   </div>
                   <select
                     value={autoBackupInterval}
@@ -282,6 +289,7 @@ export default function BackupSection({ activeMenu, ...props }) {
                       setAutoBackupInterval(v);
                       db.set("auto-backup-interval", v);
                     }}
+                    disabled={!appPasscode}
                     aria-label="Auto-backup schedule"
                     style={{
                       fontSize: 11,
@@ -325,34 +333,24 @@ export default function BackupSection({ activeMenu, ...props }) {
                     {isForceSyncing ? "Syncing…" : "Sync Now"}
                   </button>
                 </div>
+                {!appleLinkedId && (
+                  <button type="button"
+                    onClick={handleAppleSignIn}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: T.radius.md,
+                      border: `1px solid ${T.border.default}`,
+                      background: T.bg.surface,
+                      color: T.text.secondary,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Optional: Link Apple Account Restore
+                  </button>
+                )}
               </div>
-            ) : (
-              <button type="button"
-                onClick={handleAppleSignIn}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                  width: "100%",
-                  marginTop: 10,
-                  padding: "12px 16px",
-                  borderRadius: 12,
-                  border: "none",
-                  background: "#000000",
-                  color: "#FFFFFF",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif",
-                  cursor: "pointer",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                <svg viewBox="0 0 814 1000" width="16" height="16" fill="white">
-                  <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-37.3-165.9-40.8l-1.6-.6c-67.8-2.3-113.2-63-156.5-123.1C38.5 660.9 17 570 17 479.4 17 260.9 139.3 151.1 261.7 151.1c71 0 130.5 43.3 175 43.3 42.8 0 110-45.7 192.5-45.7 31 0 108.5 4.5 168.2 55.4zm-234-181.4C505.7 101.8 557 34 557 0c0-6.4-.6-12.9-1.3-18.1-1-.3-2.1-.3-3.5-.3-44.5 0-95.8 30.2-127 71.6-27.5 34.9-49.5 83.2-49.5 131.6 0 6.4 1 12.9 1.6 15.1 2.9.6 7.1 1 11 1 40 0 87.5-27.2 115.9-60.4z" />
-                </svg>
-                Sign in with Apple
-              </button>
             )}
           </div>
 

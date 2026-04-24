@@ -515,11 +515,15 @@ export function PagePass3({
 
       <WizToggle
         label="Enable PIN lock"
-        sub="Require a PIN to open the app"
+        sub="Require a PIN to open the app and encrypt iCloud backups"
         checked={security.pinEnabled}
         onChange={v => {
           if (!isNative) return;
           updateSecurity("pinEnabled", v);
+          if (v && (!security.autoBackupInterval || security.autoBackupInterval === "off")) {
+            updateSecurity("autoBackupInterval", "weekly");
+          }
+          if (!v) updateSecurity("autoBackupInterval", "off");
         }}
         disabled={!isNative}
       />
@@ -563,6 +567,28 @@ export function PagePass3({
             </div>
           )}
         </>
+      )}
+      {isNative && (
+        <WizField
+          label="Encrypted iCloud Auto-Backup"
+          hint={
+            security.pinEnabled
+              ? "Recommended. Uses your private iCloud Drive; Apple Sign-In is not required."
+              : "Enable PIN lock first so Catalyst can encrypt iCloud backups."
+          }
+        >
+          <WizSelect
+            value={security.autoBackupInterval || "off"}
+            onChange={v => updateSecurity("autoBackupInterval", v as typeof security.autoBackupInterval)}
+            disabled={!security.pinEnabled}
+            options={[
+              { value: "weekly", label: "Weekly (Recommended)" },
+              { value: "daily", label: "Daily" },
+              { value: "monthly", label: "Monthly" },
+              { value: "off", label: "Off" },
+            ]}
+          />
+        </WizField>
       )}
       <WizField label="Auto-Lock After" hint="How long before the app locks when backgrounded">
         <WizSelect

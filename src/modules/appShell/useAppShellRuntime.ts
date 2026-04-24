@@ -153,7 +153,6 @@ export function useSimulatedGeofenceNotification(
 
 interface AutoBackupParams {
   ready: boolean;
-  appleLinkedId: string | null | undefined;
   autoBackupInterval: "off" | "daily" | "weekly" | "monthly";
   history: AuditRecord[];
   renewals: Renewal[];
@@ -165,7 +164,6 @@ interface AutoBackupParams {
 
 export function useAutoICloudBackup({
   ready,
-  appleLinkedId,
   autoBackupInterval,
   history,
   renewals,
@@ -177,7 +175,7 @@ export function useAutoICloudBackup({
   const iCloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!ready || !appleLinkedId) return;
+    if (!ready) return;
     if (autoBackupInterval === "off") return;
 
     if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
@@ -203,7 +201,7 @@ export function useAutoICloudBackup({
     return () => {
       if (iCloudSyncTimer.current) clearTimeout(iCloudSyncTimer.current);
     };
-  }, [ready, appleLinkedId, autoBackupInterval, history, renewals, cards, financialConfig, personalRules, appPasscode]);
+  }, [ready, autoBackupInterval, history, renewals, cards, financialConfig, personalRules, appPasscode]);
 }
 
 interface RecoveryVaultSyncParams {

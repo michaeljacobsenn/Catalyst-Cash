@@ -6,10 +6,9 @@ import type {
 } from "../SetupWizard.js";
 import { normalizeAppError } from "../../appErrors.js";
 import { restoreBackupPayload } from "../../backup.js";
-import { downloadFromICloud } from "../../cloudSync.js";
+import { inspectICloudBackup } from "../../cloudSync.js";
 import { T } from "../../constants.js";
 import { decrypt, isEncrypted } from "../../crypto.js";
-import { refreshIdentitySessionWithAppleIdentityToken } from "../../identitySession.js";
 import { sanitizeManualInvestmentHoldings } from "../../investmentHoldings.js";
 import { log } from "../../logger.js";
 import {
@@ -26,13 +25,8 @@ import { restoreSanitizedPlaidConnections } from "../../backup.js";
 import UiGlyph from "../../UiGlyph.js";
 import { db } from "../../utils.js";
 import { NavRow, WizBtn, WizField, WizInput } from "./primitives.js";
-import type {
-  AppleSignInResult,
-  BackupPayload,
-  ToastApi,
-} from "./types.js";
+import type { BackupPayload, ToastApi } from "./types.js";
 
-const loadAppleSignIn = () => import("@capacitor-community/apple-sign-in");
 const loadWorkbookClientModule = () => import("../../excelWorkbookClient.js");
 const loadNativeExportModule = () => import("../../nativeExport.js");
 
@@ -52,8 +46,6 @@ export default function PageImport({
   toast,
   onComplete,
   onImported,
-  appleLinkedId,
-  setAppleLinkedId,
   security,
   updateSecurity,
 }: PageImportProps) {
@@ -67,6 +59,9 @@ export default function PageImport({
   const [hasContinuityEscrow, setHasContinuityEscrow] = useState<boolean>(false);
   const [hasTrustedContinuityEscrow, setHasTrustedContinuityEscrow] = useState<boolean>(false);
   const [continuityPassphrase, setContinuityPassphrase] = useState<string>("");
+  const [icloudPasscodeRequired, setIcloudPasscodeRequired] = useState<boolean>(false);
+  const [icloudPasscode, setIcloudPasscode] = useState<string>("");
+  const [icloudRestoring, setIcloudRestoring] = useState<boolean>(false);
   const [recoveryKit, setRecoveryKit] = useState<string>("");
   const [recoveryVaultId, setRecoveryVaultId] = useState<string>("");
   const [recoveryVaultKey, setRecoveryVaultKey] = useState<string>("");
@@ -190,6 +185,58 @@ export default function PageImport({
       toast?.error?.(message);
     }
     setImporting(false);
+  };
+
+  const handleICloudRestore = async (passphrase: string | null = null): Promise<void> => {
+    setIcloudRestoring(true);
+    try {
+      const result = await inspectICloudBackup(passphrase);
+      if (!result.available) {
+        toast?.info?.("No iCloud backup found for this Apple ID yet.");
+        return;
+      }
+      if (result.encrypted && !result.backup) {
+        setIcloudPasscodeRequired(true);
+        toast?.info?.(
+          result.reason === "decrypt-failed"
+            ? "That passcode did not unlock the iCloud backup."
+            : "Enter the App Passcode used to encrypt this iCloud backup."
+        );
+        return;
+      }
+      if (!result.backup?.data) {
+        toast?.error?.("The iCloud backup could not be read.");
+        return;
+      }
+
+      const success = await applyBackup(result.backup);
+      if (success && !result.backup.data["plaid-connections-sanitized"]) {
+        const plaidConnections = result.backup.data["plaid-connections"];
+        const hadPlaid = Array.isArray(plaidConnections) && plaidConnections.length > 0;
+        if (hadPlaid) {
+          const staleConnections = plaidConnections.map((connection) => ({
+            ...connection,
+            accessToken: null,
+            _needsReconnect: true,
+          }));
+          await db.set("plaid-connections", staleConnections);
+          await restoreSanitizedPlaidConnections(staleConnections);
+          setTimeout(() => {
+            toast?.warn?.("Your bank accounts need to be re-linked in Settings → Plaid.", { duration: 5000 });
+          }, 400);
+        }
+      }
+      if (success) {
+        setIcloudPasscodeRequired(false);
+        setIcloudPasscode("");
+        await onImported?.();
+      }
+    } catch (error: unknown) {
+      const failure = normalizeAppError(error, { context: "restore" });
+      toast?.error?.(failure.userMessage || "Catalyst could not restore from iCloud.");
+    } finally {
+      setIcloudRestoring(false);
+    }
   };
 
   const handleRecoveryVaultRestore = async (): Promise<void> => {
@@ -762,7 +809,7 @@ export default function PageImport({
         </div>
       </div>
 
-      {Capacitor.getPlatform() !== "web" && !appleLinkedId && (
+      {Capacitor.getPlatform() !== "web" && (
         <div
           style={{
             marginBottom: 14,
@@ -772,125 +819,26 @@ export default function PageImport({
             border: `1px solid ${T.border.default}`,
           }}
           >
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 4 }}>
             Restore from iCloud
           </div>
           <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: "0 0 10px 0" }}>
-            Link your Apple ID to instantly restore your latest backup and enable continuous auto-sync.
+            Restore a backup from this iPhone's iCloud account. Apple Sign-In is not required.
           </p>
+          {icloudPasscodeRequired && (
+            <WizField label="Previous App Passcode">
+              <WizInput
+                type="password"
+                inputMode="numeric"
+                value={icloudPasscode}
+                onChange={setIcloudPasscode}
+                placeholder="Enter the passcode used on your old iPhone"
+              />
+            </WizField>
+          )}
           <button type="button"
-            onClick={async () => {
-              try {
-                const { SignInWithApple } = await loadAppleSignIn();
-                if (!SignInWithApple?.authorize) {
-                  toast?.error?.("Apple Sign-In is not available in this build.");
-                  return;
-                }
-                const result = (await SignInWithApple.authorize({
-                  clientId: "com.jacobsen.portfoliopro",
-                  redirectURI: "https://api.catalystcash.app/auth/apple/callback",
-                  scopes: "email name",
-                })) as AppleSignInResult;
-                const userId = result.response.user;
-                const identityToken = String(result.response.identityToken || "").trim();
-                if (setAppleLinkedId) setAppleLinkedId(userId ?? null);
-                if (identityToken) {
-                  await refreshIdentitySessionWithAppleIdentityToken(identityToken)
-                    .then(async () => {
-                      const [linkedRecoveryId, continuityState] = await Promise.all([
-                        getLinkedRecoveryVaultId().catch(() => null),
-                        getRecoveryVaultContinuityState().catch(() => ({
-                          recoveryId: null,
-                          hasEscrow: false,
-                          hasTrustedEscrow: false,
-                        })),
-                      ]);
-                      if (linkedRecoveryId) {
-                        setRecoveryVaultId((current) => current || linkedRecoveryId);
-                        setDetectedLinkedRecoveryId(linkedRecoveryId);
-                      }
-                      setHasContinuityEscrow(Boolean(continuityState?.hasEscrow));
-                      setHasTrustedContinuityEscrow(Boolean(continuityState?.hasTrustedEscrow));
-                    })
-                    .catch((error) => {
-                      log.warn("restore", "Verified Apple actor binding failed during setup restore", {
-                        error: error instanceof Error ? error.message : String(error),
-                      });
-                    });
-                }
-
-                toast?.success?.(
-                  imported
-                    ? "Apple ID linked for future backups."
-                    : identityToken
-                      ? "Apple ID linked. Checking for previous data and verified restore paths..."
-                      : "Apple ID linked for iCloud backup. Checking for previous data..."
-                );
-
-                if (!imported) {
-                  let backup: BackupPayload | null = null;
-                  try {
-                    backup = await downloadFromICloud(null);
-                  } catch (e) {
-                    if (e instanceof Error && e.message.includes("passphrase required")) {
-                      const pass = window.prompt("This iCloud backup is encrypted. Enter the App Passcode used to create it:");
-                      if (!pass) {
-                        toast?.error?.("Passcode is required to restore this backup.");
-                        return;
-                      }
-                      backup = await downloadFromICloud(pass).catch(() => null);
-                      if (!backup) {
-                        toast?.error?.("Wrong passcode or backup corrupted.");
-                        return;
-                      }
-                    } else {
-                      throw e;
-                    }
-                  }
-
-                  if (backup?.data && typeof backup.data === "object") {
-                    const success = await applyBackup(backup);
-
-                    if (success && !backup.data["plaid-connections-sanitized"]) {
-                      const plaidConnections = backup.data["plaid-connections"];
-                      const hadPlaid = Array.isArray(plaidConnections) && plaidConnections.length > 0;
-
-                      if (hadPlaid) {
-                        const staleConnections = plaidConnections.map((connection) => ({
-                          ...connection,
-                          accessToken: null,
-                          _needsReconnect: true,
-                        }));
-                        await db.set("plaid-connections", staleConnections);
-                        await restoreSanitizedPlaidConnections(staleConnections);
-
-                        setTimeout(() => {
-                          toast?.warn?.("Your bank accounts need to be re-linked in Settings → Plaid.", {
-                            duration: 5000,
-                          });
-                        }, 400);
-                      }
-                    }
-
-                    if (success) {
-                      setImported(true);
-                      await onImported?.();
-                    }
-                  } else {
-                    toast?.info?.("No iCloud backup found yet.");
-                  }
-                }
-              } catch (error: unknown) {
-                const message = error instanceof Error ? error.message : "Apple Sign-In failed";
-                if (!message.toLowerCase().includes("cancel")) {
-                  toast?.error?.(
-                    message.toLowerCase().includes("not implemented") || message.toLowerCase().includes("unimplemented")
-                      ? "Apple Sign-In is not enabled in this build."
-                      : message
-                  );
-                }
-              }
-            }}
+            onClick={() => void handleICloudRestore(icloudPasscodeRequired ? icloudPasscode.trim() : null)}
+            disabled={icloudRestoring || (icloudPasscodeRequired && !icloudPasscode.trim())}
             style={{
               width: "100%",
               padding: "12px 14px",
@@ -900,10 +848,11 @@ export default function PageImport({
               color: T.text.primary,
               fontSize: 13,
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: icloudRestoring ? "not-allowed" : "pointer",
+              opacity: icloudRestoring ? 0.7 : 1,
             }}
           >
-            Sign in with Apple
+            {icloudRestoring ? "Checking iCloud…" : icloudPasscodeRequired ? "Restore Encrypted Backup" : "Check iCloud Backup"}
           </button>
         </div>
       )}
@@ -927,15 +876,15 @@ export default function PageImport({
         </div>
       )}
 
-      {Capacitor.getPlatform() !== "web" && appleLinkedId && (
+      {Capacitor.getPlatform() !== "web" && (
         <div style={{ marginBottom: 14 }}>
           <WizField
             label="iCloud Backup Interval"
             hint={
               <>
-                How often your data syncs securely to iCloud Drive.
+                How often your encrypted data saves to iCloud Drive after setup.
                 <br />
-                <span style={{ opacity: 0.8 }}>Files App → iCloud Drive → Catalyst Cash</span>
+                <span style={{ opacity: 0.8 }}>Requires an App Passcode. Apple Sign-In is not required.</span>
               </>
             }
           >

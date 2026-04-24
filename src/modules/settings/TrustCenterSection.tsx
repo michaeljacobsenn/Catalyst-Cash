@@ -110,7 +110,7 @@ export function TrustCenterSection({
           {
             title: "Linked Recovery Channels",
             body: [
-              appleLinkedId ? "Apple backup linked" : "Apple backup not linked",
+              appleLinkedId ? "Apple account restore linked" : "Apple account restore not linked",
               householdId ? `Household sync linked as ${householdId}` : "Household sync not linked",
             ].join(" • "),
           },
