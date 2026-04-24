@@ -374,12 +374,12 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByPlaceholder("Ask about your finances...").press("Enter");
 
     await expect(page.getByText("You are safe this week.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Needs work" }).first()).toBeVisible();
+    await expect(page.getByText("Was this useful?").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Improve" }).first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Needs work" }).first().click();
-    await expect(page.getByText("What missed?").first()).toBeVisible();
-    await page.getByRole("button", { name: "Wrong math" }).first().click();
-    await expect(page.getByText("Catalyst will use this feedback to tighten future replies on this device.").first()).toBeVisible();
+    await page.getByRole("button", { name: "Improve" }).first().click();
+    await expect(page.getByText("Improve that answer.")).toBeVisible();
+    await expect(page.getByText("You are safe this week.")).toHaveCount(2);
   });
 
   test("persists a settings change across reload", async ({ page }) => {
