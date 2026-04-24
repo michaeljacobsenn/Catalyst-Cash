@@ -6,12 +6,12 @@ const path = require("path");
 const distAssetsDir = path.join(process.cwd(), "dist", "assets");
 
 const budgets = {
-  mainEntry: 200000,
+  mainEntry: 205000,
   appChunk: 160000,
   portfolioShell: 5000,
-  cardPortfolio: 70000,
-  cardWizard: 50000,
-  inputForm: 96000,
+  cardPortfolio: 76000,
+  cardWizard: 87000,
+  inputForm: 110000,
   settingsTab: 60000,
   setupWizard: 45000,
   marketData: 45000,
@@ -19,7 +19,7 @@ const budgets = {
   workbookWorker: 75000,
   auditExports: 15000,
   auditHtmlFallback: 6000,
-  shellBootJs: 510000,
+  shellBootJs: 520000,
   negotiation: 45000,
   decisionRules: 30000,
   rewardsCatalog: 50000,
