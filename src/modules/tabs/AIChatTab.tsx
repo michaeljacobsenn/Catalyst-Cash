@@ -296,10 +296,45 @@ export default memo(function AIChatTab({
         : chatQuota.modelId === "gpt-5.1"
           ? "Boardroom"
           : "AskAI";
+  const alternateChatModels = useMemo(() => {
+    const options = new Map<string, { modelId: string; remaining: number; limit: number }>();
+
+    (chatQuota.alternateModels || []).forEach((option) => {
+      if (option.modelId && option.remaining > 0) {
+        options.set(option.modelId, option);
+      }
+    });
+
+    if (chatQuota.alternateModel && (chatQuota.alternateRemaining ?? 0) > 0) {
+      options.set(chatQuota.alternateModel, {
+        modelId: chatQuota.alternateModel,
+        remaining: chatQuota.alternateRemaining ?? 0,
+        limit: chatQuota.alternateRemaining ?? 0,
+      });
+    }
+
+    return Array.from(options.values());
+  }, [chatQuota.alternateModel, chatQuota.alternateModels, chatQuota.alternateRemaining]);
+  const hasQuotaModelSwitch =
+    proEnabled &&
+    chatQuota.remaining === 0 &&
+    !chatQuota.dailyCapReached &&
+    alternateChatModels.length > 0;
   const chatQuotaStatusCopy =
-    chatQuota.remaining === 0
+    hasQuotaModelSwitch
+      ? `${chatQuotaModelLabel} limit reached. Switch models to keep going.`
+      : chatQuota.remaining === 0
       ? `${chatQuotaModelLabel} limit reached today`
       : `${chatQuota.remaining} of ${chatQuota.limit} chats left today`;
+  const handleQuotaModelSwitch = useCallback((modelId: string) => {
+    if (!modelId) return;
+    (setAiModel as (m: string) => void)(modelId);
+    setError(null);
+    haptic.light();
+    void checkChatQuota(modelId)
+      .then(setChatQuota)
+      .catch(() => {});
+  }, [setAiModel]);
 
   useEffect(() => {
     let active = true;
@@ -1584,6 +1619,38 @@ export default memo(function AIChatTab({
                   }}
                 />
               </div>
+              {hasQuotaModelSwitch && (
+                <div style={{
+                  marginTop: 8,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                  gap: 6,
+                }}>
+                  {alternateChatModels.map((option) => (
+                    <button
+                      key={option.modelId}
+                      type="button"
+                      onClick={() => handleQuotaModelSwitch(option.modelId)}
+                      className="hover-btn"
+                      style={{
+                        minHeight: 28,
+                        padding: "6px 9px",
+                        borderRadius: 999,
+                        border: `1px solid ${T.accent.primary}34`,
+                        background: `${T.accent.primary}14`,
+                        color: T.accent.primary,
+                        fontSize: 10,
+                        fontWeight: 850,
+                        letterSpacing: "0.02em",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Switch to {getChatModelDisplayName(option.modelId)} · {option.remaining} left
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1757,51 +1824,6 @@ export default memo(function AIChatTab({
             />
           </div>
         )}
-
-        {/* Pro: per-model cap exhausted — offer switch to alternate model */}
-        {proEnabled && chatQuota.remaining === 0 && chatQuota.alternateModel && (chatQuota.alternateRemaining ?? 0) > 0 && (
-          <div style={{
-            marginTop: 8,
-            padding: "10px 14px",
-            borderRadius: 14,
-            background: `${T.accent.primary}10`,
-            border: `1px solid ${T.accent.primary}26`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-          }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text.primary, marginBottom: 2 }}>
-                {getChatModelDisplayName(chatQuota.modelId || "")} daily limit reached
-              </div>
-              <div style={{ fontSize: 12, color: T.text.secondary }}>
-                Switch to {getChatModelDisplayName(chatQuota.alternateModel || "")} — {chatQuota.alternateRemaining} chats remaining
-              </div>
-            </div>
-            <button type="button"
-              style={{
-                padding: "7px 13px",
-                borderRadius: 10,
-                background: "linear-gradient(135deg,#dcb15b,#f3d084)",
-                border: "none",
-                color: "#07111a",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-              onClick={() => {
-                (setAiModel as (m: string) => void)(chatQuota.alternateModel ?? "");
-                haptic.light();
-              }}
-            >
-              Switch
-            </button>
-          </div>
-        )}
-
 
         {showPaywall && (
           <Suspense fallback={null}>

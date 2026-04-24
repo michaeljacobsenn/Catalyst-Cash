@@ -17,9 +17,15 @@ function isReasoningModel(model = "") {
   return normalized.startsWith("o") || normalized.startsWith("gpt-5");
 }
 
+function isPre51Gpt5Model(model = "") {
+  const normalized = String(model || "").toLowerCase();
+  return normalized.startsWith("gpt-5") && !normalized.startsWith("gpt-5.1");
+}
+
 function resolveOutputBudget(provider, model, responseFormat) {
   const structured = responseFormat !== "text";
   const reasoning = isReasoningModel(model);
+  const normalizedModel = String(model || "").toLowerCase();
 
   if (structured) {
     if (provider === "openai") return reasoning ? 3400 : 3000;
@@ -27,7 +33,13 @@ function resolveOutputBudget(provider, model, responseFormat) {
     return 3000;
   }
 
-  if (provider === "openai") return reasoning ? 1400 : 1100;
+  if (provider === "openai") {
+    if (!reasoning) return 1100;
+    if (normalizedModel === "gpt-5-nano") return 3200;
+    if (normalizedModel === "gpt-5-mini") return 3600;
+    if (normalizedModel.startsWith("gpt-5.1")) return 2200;
+    return 3600;
+  }
   if (provider === "gemini") return 1000;
   return 1200;
 }
@@ -131,6 +143,9 @@ export async function callOpenAI(apiKey, { snapshot, systemPrompt, history, mode
 
   if (isReasoning) {
     body.max_completion_tokens = maxOutputTokens;
+    if (isPre51Gpt5Model(m)) {
+      body.reasoning_effort = responseFormat === "text" ? "low" : "medium";
+    }
     if (stream) body.stream_options = { include_usage: true };
   } else {
     body.max_tokens = maxOutputTokens;

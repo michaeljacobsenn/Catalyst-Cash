@@ -35,6 +35,12 @@ export interface ChatQuotaState {
   alternateModel?: string;
   /** Remaining chats on the alternate model */
   alternateRemaining?: number;
+  /** All alternate Pro models that still have available chats today */
+  alternateModels?: Array<{
+    modelId: string;
+    remaining: number;
+    limit: number;
+  }>;
 }
 
 export interface BackendHeaders {

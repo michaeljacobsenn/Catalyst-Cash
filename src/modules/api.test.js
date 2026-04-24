@@ -71,6 +71,37 @@ describe("streamAudit stream cleanup", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts worker-wrapped text chunks without falling back to an empty response", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"text":"Use checking for the dentist bill if it stays above your buffer."}\n'),
+        })
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"delta":" Keep savings protected unless checking drops below the floor."}\n'),
+        })
+        .mockResolvedValueOnce({ done: true, value: undefined }),
+      cancel,
+    };
+
+    vi.stubGlobal("fetch", vi.fn(async () => makeStreamingResponse(reader)));
+
+    const chunks = [];
+    for await (const chunk of streamAudit("", "snapshot", "backend", "gpt-5-nano", "sys", [], "device-1")) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.join("")).toBe(
+      "Use checking for the dentist bill if it stays above your buffer. Keep savings protected unless checking drops below the floor."
+    );
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels the reader when the consumer exits early", async () => {
     const cancel = vi.fn(async () => undefined);
     const encoder = new TextEncoder();

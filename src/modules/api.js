@@ -84,6 +84,15 @@ function extractSSEText(parsed) {
   if (parsed.choices?.[0]?.delta?.content) {
     return parsed.choices[0].delta.content;
   }
+  if (typeof parsed.text === "string") {
+    return parsed.text;
+  }
+  if (typeof parsed.content === "string") {
+    return parsed.content;
+  }
+  if (typeof parsed.delta === "string") {
+    return parsed.delta;
+  }
   if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
     return parsed.candidates[0].content.parts[0].text;
   }

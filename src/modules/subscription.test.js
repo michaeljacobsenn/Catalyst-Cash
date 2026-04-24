@@ -32,7 +32,9 @@ import {
   hasFeature,
   isModelAvailable,
   normalizeModelForTier,
+  checkChatQuota,
   checkAuditQuota,
+  recordChatUsage,
   recordAuditUsage,
   getMarketRefreshTTL,
   getHistoryLimit,
@@ -193,6 +195,24 @@ describe('Model Gating (launch mode "live")', () => {
     expect(await isModelAvailable("gpt-5-nano")).toBe(true);
     expect(await isModelAvailable("gpt-5-mini")).toBe(true);
     expect(await isModelAvailable("gpt-5.1")).toBe(true);
+  });
+
+  it("reports every alternate Pro chat model with remaining capacity", async () => {
+    await activatePro(IAP_PRODUCTS.monthly, 30);
+
+    for (let index = 0; index < 15; index += 1) {
+      await recordChatUsage("gpt-5-mini");
+    }
+
+    const quota = await checkChatQuota("gpt-5-mini");
+
+    expect(quota.allowed).toBe(false);
+    expect(quota.remaining).toBe(0);
+    expect(quota.dailyCapReached).toBeUndefined();
+    expect(quota.alternateModels).toEqual([
+      { modelId: "gpt-5-nano", remaining: 15, limit: 15 },
+      { modelId: "gpt-5.1", remaining: 5, limit: 5 },
+    ]);
   });
 });
 

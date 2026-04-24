@@ -2489,7 +2489,7 @@ export default {
       const shouldStream = stream !== false && responseFormat === "text";
       const providerShouldStream = shouldStream && resolvedType !== "chat";
 
-      const result = await handler(apiKey, {
+      let result = await handler(apiKey, {
         snapshot: effectiveSnapshot,
         systemPrompt: resolvedSystemPrompt,
         history: effectiveHistory,
@@ -2549,6 +2549,23 @@ export default {
 
       let resultText = stripThoughtProcess(typeof result === "string" ? result : result?.text || "");
       let hitDegradedFallback = false;
+      if (resolvedType === "chat" && !resultText.trim()) {
+        workerLog(env, "warn", "chat-empty", "Provider returned an empty chat response. Retrying once before returning to the app.", {
+          provider: selectedProvider,
+          model: resolvedModel,
+        });
+        const retryResult = await handler(apiKey, {
+          snapshot: effectiveSnapshot,
+          systemPrompt: resolvedSystemPrompt,
+          history: effectiveHistory,
+          model: resolvedModel,
+          stream: false,
+          responseFormat: "text",
+          timeoutMs: Math.min(providerTimeoutMs, 18_000),
+        });
+        result = retryResult;
+        resultText = stripThoughtProcess(typeof retryResult === "string" ? retryResult : retryResult?.text || "");
+      }
       if ((responseFormat || "json") !== "text") {
         const coercedStructuredJson = coerceStructuredJsonResult(resultText);
         if (coercedStructuredJson) {

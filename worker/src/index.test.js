@@ -2334,6 +2334,60 @@ describe("AI provider routing and gating", () => {
     expect(response.headers.get("X-RateLimit-Limit")).toBe("5");
   });
 
+  it("retries empty chat model responses before returning to the app", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "" } }],
+            usage: { prompt_tokens: 20, completion_tokens: 1200 },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "Use checking for the bill, then keep the emergency floor protected." } }],
+            usage: { prompt_tokens: 20, completion_tokens: 22 },
+          }),
+          { status: 200 }
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await worker.fetch(
+      new Request("https://api.catalystcash.app/audit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Catalyst-Testing": "1",
+          "X-Subscription-Tier": "pro",
+        },
+        body: JSON.stringify({
+          snapshot: "Where did my money go last week?",
+          context: {},
+          type: "chat",
+          model: "gpt-5-mini",
+          provider: "openai",
+          stream: false,
+          responseFormat: "text",
+        }),
+      }),
+      makeEnv({
+        OPENAI_API_KEY: "openai-test-key",
+      }),
+      makeCtx()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      result: "Use checking for the bill, then keep the emergency floor protected.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("aliases legacy pro o3 chat requests to GPT-5.1 Boardroom", async () => {
     vi.stubGlobal("caches", {
       default: {

@@ -431,6 +431,18 @@ function buildProChatQuota(state, modelId) {
   const alternateCap = alternateModelId ? PRO_MODEL_CAPS[alternateModelId] || 0 : 0;
   const alternateUsed = alternateModelId ? state.chatMessagesByModel?.[alternateModelId] || 0 : 0;
   const alternateRemaining = Math.min(globalRemaining, Math.max(0, alternateCap - alternateUsed));
+  const alternateModels = TIERS.pro.models
+    .filter((candidateId) => candidateId !== effectiveModelId && PRO_MODEL_CAPS[candidateId] !== undefined)
+    .map((candidateId) => {
+      const candidateCap = PRO_MODEL_CAPS[candidateId] || 0;
+      const candidateUsed = state.chatMessagesByModel?.[candidateId] || 0;
+      return {
+        modelId: candidateId,
+        remaining: Math.min(globalRemaining, Math.max(0, candidateCap - candidateUsed)),
+        limit: Math.min(PRO_DAILY_CHAT_CAP, candidateCap),
+      };
+    })
+    .filter((candidate) => candidate.remaining > 0);
 
   const result = {
     allowed: modelRemaining > 0,
@@ -440,6 +452,7 @@ function buildProChatQuota(state, modelId) {
     modelId: effectiveModelId,
     alternateModel: alternateModelId || undefined,
     alternateRemaining: alternateModelId ? alternateRemaining : undefined,
+    alternateModels,
   };
 
   if (globalRemaining <= 0) {

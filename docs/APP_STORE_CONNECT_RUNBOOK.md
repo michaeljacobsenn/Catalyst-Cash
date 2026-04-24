@@ -2,20 +2,23 @@
 
 Use this after the repo gates are green and the backend/site changes are already live.
 
-## Current state as of April 23, 2026
+## Current state as of April 24, 2026
 
 - Production config is live with `gatingMode: "live"` at `https://api.catalystcash.app/config`
 - Production health must advertise OpenAI as the default provider at `https://api.catalystcash.app/health`
-- Repo gates passed on this machine: `lint`, `typecheck`, and `test:e2e:critical`
-- Latest signed App Store Connect upload sent from this machine: build `49`
+- Repo gates passed on this machine: `lint`, `typecheck`, `prompts:check`, targeted unit tests, production `build`, and `test:e2e:critical`
+- Latest deployed Worker version from this machine: `6dcb6b98-a6ed-41b2-b3c8-3d3d718e562d`
+- Latest deployed Pages preview from this machine: `https://7ec87f0d.catalystcash.pages.dev`
+- Latest signed App Store Connect upload previously sent from this machine: build `51`
 - App: `Catalyst Cash`
 - Bundle ID: `com.jacobsen.portfoliopro`
 - Version: `2.0.0`
-- Public TestFlight group now points only to build `49`
-- Build `49` is attached to `iOS App Version 2.0.0`
+- App Store Connect `iOS App Version 2.0.0` page still showed build `49` attached after the April 24 metadata sweep
+- Public TestFlight group previously pointed only to build `49`
 - Build `49` is approved for external testing and live on the public TestFlight link
 - Corrected iPhone 6.5-inch App Store screenshots are uploaded with the current app icon
-- Privacy policy is live at `https://catalystcash.app/privacy` with the April 23, 2026 update
+- App Store promotional text, description, and keywords were saved on April 24, 2026
+- Privacy policy is live at `https://catalystcash.app/privacy`
 - Support / beta feedback email: `support@catalystcash.app`
 
 ## Minimal manual actions left
@@ -25,7 +28,8 @@ Use this after the repo gates are green and the backend/site changes are already
 1. Save Content Rights once the final legal representation is confirmed.
 2. Update App Privacy from `Data Not Collected` to match the live privacy policy and production telemetry behavior.
 3. Complete Digital Services Act setup if Apple requires trader/contact information for the account.
-4. Click `Add for Review` only after the declarations are complete.
+4. Attach the latest processed build before App Review. The page still showed build `49` attached during the April 24 sweep.
+5. Click `Add for Review` only after the declarations are complete.
 
 ### 2. Monitor public TestFlight
 
@@ -105,26 +109,30 @@ Weekly cash flow clarity
 
 ### Promotional Text
 
-Stay ahead of bills, renewals, and cash crunches with a fast weekly money audit that ends with a clear next move.
+Know what is safe to spend, which bills are coming, and what move to make next with a private weekly money audit and finance-focused Ask AI.
 
 ### Keywords
 
-budget,bills,subscriptions,cash flow,expense tracker,spending,debt,paycheck,savings,planner
+budget,bills,cash flow,expense tracker,spending,debt,paycheck,savings,subscriptions,credit cards
 
 ### Description
 
-Catalyst Cash helps you get ahead of your money week before bills, renewals, and timing gaps turn into stress.
+Catalyst Cash is a weekly command center for personal cash flow, bills, subscriptions, credit cards, and money decisions.
 
-Run a fast weekly audit, see what needs attention now, and leave with a clear plan for what to do next.
+Instead of staring at a generic budget dashboard, run a fast money audit and leave with a clear answer: what is safe to spend, what bills are coming, which card makes sense, and what move matters most this week.
 
 Use Catalyst Cash to:
 
-- review bills, renewals, debt, savings, and cash flow in one place
-- spot shortfalls and timing pressure before they become emergencies
-- run a guided weekly audit in minutes
-- track manually or connect accounts when you want more automation
-- keep a local-first financial record on your device
-- back up, export, and restore with confidence
-- use AskAI for finance-focused follow-up on your current situation
+- See your safe-to-spend number before bills and renewals hit
+- Catch upcoming subscriptions, annual fees, and timing gaps early
+- Review checking, savings, debt, cards, rewards, and cash flow in one place
+- Choose the right card before you pay
+- Build a weekly action plan for debt payoff, savings, and spending control
+- Ask finance-focused AI follow-up questions grounded in your current snapshot
+- Track manually or connect accounts when you want more automation
+- Keep a local-first financial record on your device
+- Back up, export, and restore your data with confidence
 
-Catalyst Cash is built for real weekly decision-making, not passive dashboard watching. Open the app, understand the week, and move forward with a sharper money plan.
+Catalyst Cash is built for people who want an active money system, not passive charts. Open the app, run the audit, understand the week, and move forward with a sharper plan.
+
+Privacy-first by design: your core records stay local on your device. Optional online features are used only when you choose them, such as AI, account linking, backup, restore, or export workflows.
