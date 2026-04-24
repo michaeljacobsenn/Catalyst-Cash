@@ -575,7 +575,7 @@ describe("launch prompt eval pack", () => {
 
     expect(prompt).toContain("Operate like a conservative CFO, forensic financial analyst, and cash-flow auditor.");
     expect(prompt).toContain("Start with a one-sentence verdict that answers the question directly.");
-    expect(prompt).toContain("Why this is the right call");
+    expect(prompt).toContain("Why this is right");
     expect(prompt).toContain("Best next move");
     expect(prompt).toContain("Watchouts / alternative path");
     expect(prompt).toContain("Separate observed facts from assumptions.");
