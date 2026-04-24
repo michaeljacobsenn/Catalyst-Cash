@@ -11,7 +11,7 @@ Use this after the repo gates are green and before opening launch or a public Te
 
 ## Production backend
 
-- Confirm `https://api.catalystcash.app/health` returns `status: ok`
+- Confirm `https://api.catalystcash.app/health` returns `status: ok`, `defaultProvider: "openai"`, and `defaultModel: "gpt-5-mini"`
 - Confirm `https://api.catalystcash.app/config` returns:
   - `gatingMode: "live"`
   - `minVersion: "2.0.0"` or higher only if intentionally forcing an app update
@@ -19,7 +19,7 @@ Use this after the repo gates are green and before opening launch or a public Te
 - Confirm Cloudflare worker secrets/vars are present:
   - `REVENUECAT_SECRET_KEY`
   - `REVENUECAT_ENTITLEMENT_ID` if it differs from the default `Catalyst Cash Pro`
-  - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+  - `OPENAI_API_KEY`
   - `PLAID_CLIENT_ID`
   - `PLAID_SECRET`
 
@@ -38,10 +38,10 @@ Use this after the repo gates are green and before opening launch or a public Te
 - RevenueCat entitlement ID matches `Catalyst Cash Pro`
 - Restore purchases works in TestFlight
 
-## Gemini and vendor billing
+## AI vendor billing
 
-- Google billing is active for the production project
-- Gemini quota is high enough for beta/launch traffic
+- OpenAI billing is active for the production project
+- OpenAI usage limits are high enough for beta/launch traffic
 - Budget alerts and hard-spend alerts are configured
 - Error monitoring is in place for provider failures and 429s
 

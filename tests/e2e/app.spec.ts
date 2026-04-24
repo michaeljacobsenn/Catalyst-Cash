@@ -70,7 +70,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await seedStorage(page, {});
     await completeOnboarding(page);
     await expect(page.getByRole("heading", { name: "Dashboard" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Begin first audit", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start First Audit", exact: true })).toBeVisible();
   });
 
   test("restores the main shell after onboarding on reload", async ({ page }) => {
@@ -379,7 +379,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByRole("button", { name: "Needs work" }).first().click();
     await expect(page.getByText("What missed?").first()).toBeVisible();
     await page.getByRole("button", { name: "Wrong math" }).first().click();
-    await expect(page.getByText("Feedback saved on this device.").first()).toBeVisible();
+    await expect(page.getByText("Catalyst will use this feedback to tighten future replies on this device.").first()).toBeVisible();
   });
 
   test("persists a settings change across reload", async ({ page }) => {
@@ -441,10 +441,10 @@ test.describe("Catalyst Cash end-to-end", () => {
 
     await page.getByRole("tab", { name: "Home" }).click();
     await openSettingsMenu(page, /Backup & Sync/i);
-    await expect(page.getByText("Backup & Sync").first()).toBeVisible();
+    await expect(page.getByText("Backup Essentials").first()).toBeVisible();
 
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "JSON" }).click({ force: true });
+    await page.getByRole("button", { name: "ENCRYPTED" }).click({ force: true });
     await expect(page.getByText("Encrypt Backup")).toBeVisible();
     await page.getByLabel("Backup passphrase").fill("BackupPass123!");
     await page.getByRole("button", { name: "Encrypt & Export" }).click();
@@ -660,8 +660,8 @@ test.describe("Catalyst Cash end-to-end", () => {
     await completeOnboarding(page);
 
     await openSettingsMenu(page, /Backup & Sync/i);
-    await expect(page.getByText("Backup & Sync").first()).toBeVisible();
-    await page.getByRole("button", { name: "Setup" }).click();
+    await expect(page.getByText("Backup Essentials").first()).toBeVisible();
+    await page.getByRole("button", { name: "Set up" }).click();
     const householdModal = page.getByText("Household Sync (E2EE)").locator("xpath=ancestor::div[2]");
     await householdModal.waitFor();
     await householdModal.locator('input[type="text"]').fill("FamilyOne");
@@ -669,7 +669,7 @@ test.describe("Catalyst Cash end-to-end", () => {
     await page.getByRole("button", { name: "Save & Sync" }).click();
 
     await expect.poll(() => householdApi.fetches.length, { timeout: 5000 }).toBeGreaterThan(0);
-    await expect(page.getByText("Linked as: FamilyOne")).toBeVisible();
+    await expect(page.getByText("Linked as FamilyOne.")).toBeVisible();
 
     await page.getByRole("button", { name: "Back to Settings" }).evaluate((button) => {
       (button as HTMLButtonElement).click();

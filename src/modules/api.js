@@ -74,7 +74,8 @@ function buildBackendError(message, status, provider) {
 
 /**
  * Extract text from any provider's SSE chunk.
- * The worker may forward chunks from Claude, OpenAI, or Gemini.
+ * The production worker streams OpenAI chunks, while this parser remains
+ * tolerant of legacy provider payloads from older builds.
  */
 function extractSSEText(parsed) {
   if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {

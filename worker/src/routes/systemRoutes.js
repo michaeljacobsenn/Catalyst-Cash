@@ -157,9 +157,9 @@ export async function handleSystemRoute({
       JSON.stringify({
         status: "ok",
         version: "1.1",
-        providers: ["gemini", "openai"],
-        defaultProvider: "gemini",
-        defaultModel: DEFAULTS.gemini,
+        providers: ["openai"],
+        defaultProvider: "openai",
+        defaultModel: DEFAULTS.openai,
         plaid: Boolean(env.PLAID_CLIENT_ID && env.PLAID_SECRET),
       }),
       {

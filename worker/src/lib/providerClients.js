@@ -338,6 +338,6 @@ export function getProviderHandler(provider) {
     case "anthropic":
       return { handler: callClaude, keyName: "ANTHROPIC_API_KEY", keyNames: ["ANTHROPIC_API_KEY"] };
     default:
-      return { handler: callGemini, keyName: "GOOGLE_API_KEY", keyNames: ["GOOGLE_API_KEY", "GEMINI_API_KEY"] };
+      return { handler: callOpenAI, keyName: "OPENAI_API_KEY", keyNames: ["OPENAI_API_KEY"] };
   }
 }

@@ -657,7 +657,12 @@ export async function openAuditComposer(page: Page) {
 export async function openSettingsMenu(page: Page, menuName: RegExp | string) {
   await page.getByRole("button", { name: "Open Settings" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await page.getByRole("button", { name: menuName }).click();
+  const menuButton = page.getByRole("button", { name: menuName }).first();
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
+  if (menuName instanceof RegExp && menuName.test("Backup & Sync")) {
+    await expect(page.getByText("Backup Essentials").first()).toBeVisible();
+  }
 }
 
 function escapeRegex(value: string) {

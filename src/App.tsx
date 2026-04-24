@@ -239,6 +239,7 @@ function CatalystCashShell() {
       resetNavigationState,
     ]
   );
+  const handleFirstRunRestoreComplete = useCallback(() => refreshAppState("dashboard"), [refreshAppState]);
 
   function mergeUniqueById<T extends { id?: string | null }>(existing: T[] = [], incoming: T[] = []): T[] {
     const ids = new Set(existing.map((item) => item.id).filter(Boolean));
@@ -751,7 +752,7 @@ function CatalystCashShell() {
       <>
         <GlobalStyles />
         <FirstRunRestoreGate
-          onRestoreComplete={() => refreshAppState("dashboard")}
+          onRestoreComplete={handleFirstRunRestoreComplete}
           setAppPasscode={setAppPasscode}
           setRequireAuth={setRequireAuth}
           setIsLocked={setIsLocked}

@@ -34,8 +34,6 @@ interface SecurityContextValue {
   setUseFaceId?: ((value: boolean) => void) | undefined;
   setIsLocked?: ((value: boolean) => void) | undefined;
   setLockTimeout?: ((value: number) => void) | undefined;
-  setAppleLinkedId?: ((value: string | null) => void) | undefined;
-  appleLinkedId?: string | null;
   secretStorageStatus?: {
     mode: "native-secure" | "native-unavailable" | "web-limited";
   };
@@ -233,7 +231,7 @@ function StepHeader({
 import { trackFunnel } from "../funnelAnalytics.js";
 
 export default function SetupWizard() {
-  const { setAppleLinkedId, appleLinkedId, setRequireAuth, setAppPasscode, setUseFaceId, setIsLocked, setLockTimeout } =
+  const { setRequireAuth, setAppPasscode, setUseFaceId, setIsLocked, setLockTimeout } =
     useSecurity() as SecurityContextValue;
   const { setOnboardingComplete, navTo } = useNavigation() as NavigationContextValue;
   const { themeMode, setThemeMode, setFinancialConfig } = useSettings();
@@ -792,10 +790,6 @@ export default function SetupWizard() {
                     toast={toast}
                     onComplete={skipToDashboard}
                     onImported={() => hydrateWizardFromStorage({ syncContexts: true })}
-                    appleLinkedId={appleLinkedId ?? null}
-                    setAppleLinkedId={setAppleLinkedId}
-                    security={security}
-                    updateSecurity={updateSecurity}
                   />
                 )}
                 {pageId === "profile" && <LazyPageProfile data={combinedData} onChange={handleCombinedChange} onNext={next} onBack={back} />}

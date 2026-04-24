@@ -136,7 +136,7 @@ export default function FirstRunRestoreGate({
           </div>
           <p style={bodyTextStyle}>
             {status === "checking"
-              ? "If this iPhone uses the same Apple ID, Catalyst can restore before setup."
+              ? "If this iPhone uses the same iCloud account, Catalyst can restore before setup."
               : "Keep Catalyst open while your encrypted data is restored."}
           </p>
         </div>

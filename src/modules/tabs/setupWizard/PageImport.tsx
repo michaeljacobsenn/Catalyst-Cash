@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import type {
-  SetupWizardSecurityState,
-  SetupWizardUpdate,
-} from "../SetupWizard.js";
 import { normalizeAppError } from "../../appErrors.js";
 import { restoreBackupPayload } from "../../backup.js";
 import { inspectICloudBackup } from "../../cloudSync.js";
@@ -35,10 +31,6 @@ interface PageImportProps {
   toast?: ToastApi;
   onComplete?: (() => void) | null;
   onImported?: (() => Promise<void> | void) | null;
-  appleLinkedId?: string | null;
-  setAppleLinkedId?: ((value: string | null) => void) | undefined;
-  security: SetupWizardSecurityState;
-  updateSecurity: SetupWizardUpdate<SetupWizardSecurityState>;
 }
 
 export default function PageImport({
@@ -46,8 +38,6 @@ export default function PageImport({
   toast,
   onComplete,
   onImported,
-  security,
-  updateSecurity,
 }: PageImportProps) {
   const [importing, setImporting] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
@@ -192,7 +182,7 @@ export default function PageImport({
     try {
       const result = await inspectICloudBackup(passphrase);
       if (!result.available) {
-        toast?.info?.("No iCloud backup found for this Apple ID yet.");
+        toast?.info?.("No iCloud backup found for this iCloud account yet.");
         return;
       }
       if (result.encrypted && !result.backup) {
@@ -871,48 +861,8 @@ export default function PageImport({
             Native-only cloud restore
           </div>
           <p style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.5, margin: 0 }}>
-            Apple Sign-In and iCloud restore are intentionally limited to the native iPhone app. On web, restore from an encrypted export file instead.
+            iCloud restore is available in the native iPhone app. On web, restore from an encrypted export file instead.
           </p>
-        </div>
-      )}
-
-      {Capacitor.getPlatform() !== "web" && (
-        <div style={{ marginBottom: 14 }}>
-          <WizField
-            label="iCloud Backup Interval"
-            hint={
-              <>
-                How often your encrypted data saves to iCloud Drive after setup.
-                <br />
-                <span style={{ opacity: 0.8 }}>Requires an App Passcode. Apple Sign-In is not required.</span>
-              </>
-            }
-          >
-            <select
-              value={security?.autoBackupInterval || "off"}
-              onChange={(event) => updateSecurity("autoBackupInterval", event.target.value as SetupWizardSecurityState["autoBackupInterval"])}
-              aria-label="iCloud backup interval"
-              className="wiz-input"
-              style={{
-                width: "100%",
-                height: 44,
-                padding: "0 14px",
-                borderRadius: T.radius.md,
-                background: T.bg.elevated,
-                border: `1px solid ${T.border.default}`,
-                color: T.text.primary,
-                fontSize: 14,
-                outline: "none",
-                fontFamily: T.font.sans,
-                boxSizing: "border-box",
-              }}
-            >
-              <option value="off">Off</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-          </WizField>
         </div>
       )}
 

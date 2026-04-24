@@ -286,7 +286,7 @@ export default function SettingsTab({
 
   const handleAppleSignIn = async () => {
     if (Capacitor.getPlatform() === "web") {
-      window.toast?.error?.("Apple Sign-In and iCloud backup are available in the native iPhone app only.");
+      window.toast?.error?.("Apple account restore is available in the native iPhone app only. iCloud backup uses the device's iCloud account.");
       return;
     }
     try {
@@ -322,8 +322,8 @@ export default function SettingsTab({
       void trackFunnel("apple_id_linked");
       window.toast?.success?.(
         verifiedRestoreReady
-          ? "Apple ID linked for backup and verified account restore."
-          : "Apple ID linked for app unlock and iCloud backup."
+          ? "Apple account restore linked and verified."
+          : "Apple account restore linked."
       );
     } catch (error) {
       const failure = normalizeAppError(error, { context: "security" });
@@ -352,7 +352,7 @@ export default function SettingsTab({
       setLastPortableBackupTS(null);
       setLastPortableBackupKind(null);
     }
-    window.toast?.success?.("Apple ID unlinked");
+    window.toast?.success?.("Apple account restore unlinked.");
   };
 
   const [confirmClear, setConfirmClear] = useState(false);

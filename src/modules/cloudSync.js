@@ -17,7 +17,7 @@ const ICLOUD_RETRY_DELAY_MS = 2000;
 //
 // On iOS: Uses the native ICloudSyncPlugin which writes to the
 // real iCloud ubiquity container. Survives app deletion,
-// restores on new devices with the same Apple ID.
+// restores on new devices signed into the same iCloud account.
 //
 // On Web: intentionally unsupported. Browser storage is not
 // presented as iCloud-equivalent backup.

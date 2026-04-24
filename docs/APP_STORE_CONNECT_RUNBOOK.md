@@ -5,6 +5,7 @@ Use this after the repo gates are green and the backend/site changes are already
 ## Current state as of April 23, 2026
 
 - Production config is live with `gatingMode: "live"` at `https://api.catalystcash.app/config`
+- Production health must advertise OpenAI as the default provider at `https://api.catalystcash.app/health`
 - Repo gates passed on this machine: `lint`, `typecheck`, and `test:e2e:critical`
 - Latest signed App Store Connect upload sent from this machine: build `49`
 - App: `Catalyst Cash`
@@ -50,17 +51,18 @@ In RevenueCat, verify:
 - the active/default offering contains monthly, yearly, and lifetime products
 - each RevenueCat product maps to the matching App Store product ID above
 
-### 5. Confirm Gemini billing
+### 5. Confirm AI vendor billing
 
-In Google Cloud / AI Studio, verify:
+In OpenAI / the production AI vendor account, verify:
 
-- billing is active for the production Gemini project
-- monthly budget alerts are enabled
-- quota is sufficient for public TestFlight traffic
+- billing is active for the production OpenAI project
+- monthly budget alerts and hard-spend alerts are enabled
+- usage limits are sufficient for public TestFlight traffic
+- worker secrets point to the active production OpenAI key
 
 ### 6. Run physical-device smoke
 
-Run the checks in [IOS_LAUNCH_CHECKLIST.md](/Users/michaeljacobsen/Desktop/PortfolioPro%20Public/docs/IOS_LAUNCH_CHECKLIST.md) before final App Review.
+Run the checks in [IOS_LAUNCH_CHECKLIST.md](/Users/michaeljacobsen/Desktop/PortfolioPro%20Public/docs/IOS_LAUNCH_CHECKLIST.md) before final App Review, including a same-iCloud-account encrypted backup restore on a real iPhone.
 
 ## Paste-ready TestFlight copy
 

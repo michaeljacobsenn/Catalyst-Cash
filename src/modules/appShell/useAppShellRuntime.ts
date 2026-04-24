@@ -342,10 +342,8 @@ export function useHouseholdSync({
     const merged = await syncHouseholdState().catch(() => false);
     if (merged) {
       toast.success("Household data synced.");
-    } else {
-      await refreshAppState("dashboard");
     }
-  }, [refreshAppState, syncHouseholdState, toast]);
+  }, [syncHouseholdState, toast]);
 
   return {
     handleRestoreComplete,

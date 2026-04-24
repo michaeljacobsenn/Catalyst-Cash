@@ -203,7 +203,7 @@ export default function BackupSection({ activeMenu, ...props }) {
                   Auto-Backup
                 </div>
                 <div style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.55, marginTop: 5 }}>
-                  Best for most people. Saves encrypted backups to your private iCloud Drive so a new iPhone on the same Apple ID can restore faster.
+                  Best for most people. Saves encrypted backups to your private iCloud Drive so a new iPhone on the same iCloud account can restore faster.
                 </div>
               </div>
               <div
@@ -280,7 +280,7 @@ export default function BackupSection({ activeMenu, ...props }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: isNarrowPhone ? "1fr" : "minmax(0, 1fr) auto", gap: 10, alignItems: "center" }}>
                   <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.55 }}>
-                    Catalyst keeps an encrypted backup in your private iCloud Drive. A new iPhone on the same Apple ID can auto-detect it before setup.
+                    Catalyst keeps an encrypted backup in your private iCloud Drive. A new iPhone on the same iCloud account can auto-detect it before setup.
                   </div>
                   <select
                     value={autoBackupInterval}
