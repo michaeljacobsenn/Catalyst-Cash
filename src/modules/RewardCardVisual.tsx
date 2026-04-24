@@ -296,6 +296,11 @@ export default function RewardCardVisual({
             lineHeight: 1.08,
             textWrap: "balance",
             maxWidth: size === "hero" ? "74%" : "78%",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: size === "hero" ? 2 : 3,
+            WebkitBoxOrient: "vertical",
+            wordBreak: "break-word",
           }}
         >
           {card.name}

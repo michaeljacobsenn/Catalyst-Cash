@@ -24,7 +24,12 @@ interface SafetySnapshotCardProps {
   visible: boolean;
 }
 
-const Card = UICard as unknown as (props: { children?: ReactNode; animate?: boolean; style?: CSSProperties }) => ReactNode;
+const Card = UICard as unknown as (props: {
+  children?: ReactNode;
+  animate?: boolean;
+  className?: string;
+  style?: CSSProperties;
+}) => ReactNode;
 
 export default function SafetySnapshotCard({
   safetyColor,
@@ -51,36 +56,39 @@ export default function SafetySnapshotCard({
   return (
     <Card
       animate
+      className="cash-radar-card"
       style={{
         padding: isSmallPhone ? "18px 16px" : "20px 18px",
         marginBottom: 12,
-        background: T.bg.card,
-        border: `1px solid ${T.border.subtle}`,
-        overflow: "visible",
+        background: `linear-gradient(150deg, ${T.bg.card} 0%, ${T.bg.elevated} 56%, ${T.bg.surface} 100%)`,
+        border: `1px solid ${safetyColor}26`,
+        boxShadow: `0 18px 42px rgba(0,0,0,0.24), inset 0 1px 0 rgba(114,215,255,0.06)`,
+        overflow: "hidden",
+        position: "relative",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div
             style={{
-            width: 28,
-            height: 28,
-            borderRadius: 10,
-            background: T.bg.elevated,
-            border: `1px solid ${T.border.subtle}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+              width: 30,
+              height: 30,
+              borderRadius: 12,
+              background: `${safetyColor}12`,
+              border: `1px solid ${safetyColor}28`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               flexShrink: 0,
             }}
           >
             {safetyIcon}
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
-              THIS WEEK
+            <div style={{ fontSize: 10, fontWeight: 850, color: safetyColor, fontFamily: T.font.mono, letterSpacing: "0.09em", textTransform: "uppercase" }}>
+              Cash Radar
             </div>
-            <div style={{ fontSize: "clamp(16px, 4.5vw, 18px)", fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+            <div style={{ fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 900, color: T.text.primary, letterSpacing: "-0.03em", lineHeight: 1.1, fontFamily: T.font.display }}>
               Am I safe right now?
             </div>
           </div>
@@ -89,8 +97,8 @@ export default function SafetySnapshotCard({
           style={{
             padding: "5px 10px",
             borderRadius: 999,
-            background: T.bg.elevated,
-            border: `1px solid ${T.border.subtle}`,
+            background: `rgba(114,215,255,0.055)`,
+            border: `1px solid ${safetyColor}25`,
             color: safetyColor,
             fontSize: 10,
             fontWeight: 800,
@@ -105,7 +113,7 @@ export default function SafetySnapshotCard({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: isCompactWidth ? "clamp(18px, 5.7vw, 20px)" : "clamp(19px, 5.5vw, 22px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.03em", lineHeight: 1.08, marginBottom: 4, overflowWrap: "anywhere" }}>
+          <div style={{ fontSize: isCompactWidth ? "clamp(18px, 5.7vw, 21px)" : "clamp(19px, 5.5vw, 23px)", fontWeight: 900, color: safetyColor, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 5, overflowWrap: "anywhere", fontFamily: T.font.display }}>
             {headline}
           </div>
           <p style={{ fontSize: 12, color: T.text.secondary, lineHeight: 1.45, margin: 0 }}>
@@ -113,20 +121,21 @@ export default function SafetySnapshotCard({
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isCompactWidth ? "repeat(6, minmax(0, 1fr))" : "1.35fr repeat(3, minmax(0, 1fr))", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
           <div
             style={{
               padding: isSmallPhone ? "11px 12px" : "12px 14px",
               borderRadius: T.radius.lg,
-              background: `${T.bg.elevated}`,
-              border: `1px solid ${T.border.subtle}`,
-              gridColumn: isCompactWidth ? "1 / -1" : "auto",
+              background: `linear-gradient(180deg, rgba(114,215,255,0.055), rgba(155,108,255,0.02))`,
+              border: `1px solid ${safetyColor}24`,
+              boxShadow: `inset 0 1px 0 rgba(114,215,255,0.06)`,
+              gridColumn: "1 / -1",
             }}
           >
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 850, color: T.text.dim, letterSpacing: "0.08em", fontFamily: T.font.mono, marginBottom: 7 }}>
               SAFE TO SPEND
             </div>
-            <div style={{ fontSize: isSmallPhone ? 22 : 24, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.04em", fontFamily: T.font.mono, lineHeight: 1.05 }}>
+            <div style={{ fontSize: isSmallPhone ? 24 : 27, fontWeight: 900, color: privacyMode ? T.text.dim : safetyColor, letterSpacing: "-0.05em", fontFamily: T.font.display, lineHeight: 1.0 }}>
               {privacyMode ? "••••••" : safeToSpend.toLocaleString("en-US", { style: "currency", currency: "USD" })}
             </div>
             <div style={{ fontSize: 10, color: T.text.dim, marginTop: 4, lineHeight: 1.35 }}>
@@ -148,6 +157,7 @@ export default function SafetySnapshotCard({
             label="30-DAY BILLS"
             value={privacyMode ? "••••" : upcomingBills30d.toLocaleString("en-US", { style: "currency", currency: "USD" })}
             isCompactWidth={isCompactWidth}
+            wide
           />
         </div>
 
@@ -159,9 +169,10 @@ export default function SafetySnapshotCard({
             gap: 10,
             padding: "11px 12px",
             borderRadius: T.radius.lg,
-            background: `${T.bg.surface}`,
-            border: `1px solid ${T.border.subtle}`,
+            background: `rgba(114,215,255,0.045)`,
+            border: `1px solid ${T.border.default}`,
             flexWrap: "wrap",
+            boxShadow: `inset 0 1px 0 rgba(114,215,255,0.045)`,
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -199,26 +210,29 @@ function MetricTile({
   label,
   value,
   isCompactWidth,
+  wide = false,
 }: {
   label: string;
   value: string;
   isCompactWidth: boolean;
+  wide?: boolean;
 }) {
   return (
     <div
       style={{
         padding: "10px 12px",
         borderRadius: T.radius.md,
-        background: `${T.bg.card}`,
+        background: `rgba(114,215,255,0.035)`,
         border: `1px solid ${T.border.subtle}`,
+        boxShadow: `inset 0 1px 0 rgba(114,215,255,0.04)`,
         minWidth: 0,
-        gridColumn: isCompactWidth ? "span 2" : "auto",
+        gridColumn: wide ? "1 / -1" : "auto",
       }}
     >
       <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", fontFamily: T.font.mono, marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: T.text.primary, overflowWrap: "anywhere" }}>
+      <div style={{ fontSize: isCompactWidth ? 12 : 13, fontWeight: 800, color: T.text.primary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontVariantNumeric: "tabular-nums", fontFamily: T.font.mono }}>
         {value}
       </div>
     </div>

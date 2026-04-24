@@ -57,6 +57,10 @@ const LEGACY_CATEGORY_MAP: Record<string, string> = {
   ss: "subs",
   fixed: "housing",
   monthly: "housing",
+  utilities: "housing",
+  utility: "housing",
+  health: "medical",
+  healthcare: "medical",
   cadence: "subs",
   periodic: "subs",
 };

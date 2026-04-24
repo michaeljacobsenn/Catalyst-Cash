@@ -1,6 +1,7 @@
   import React,{ lazy,Suspense,useEffect,useMemo,useRef,useState } from "react";
   import type { CatalystCashConfig,Card as PortfolioCard } from "../../types/index.js";
   import { classifyMerchant } from "../api.js";
+  import { getShortCardLabel } from "../cards.js";
   import { T } from "../constants.js";
   import { log } from "../logger.js";
   import { inferMerchantIdentity } from "../merchantIdentity.js";
@@ -270,6 +271,20 @@ function formatRewardCategoryLabel(value: string | null | undefined) {
   const key = String(value || "").trim();
   if (!key) return "Everyday spending";
   return REWARD_CATEGORY_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatTightCardLabel(value: string | null | undefined) {
+  const cleaned = String(value || "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b(?:card|rewards|signature|cash rewards)\b/gi, "")
+    .replace(/\bBlue Cash Everyday\b/i, "Blue Cash")
+    .replace(/\bFreedom Unlimited\b/i, "Freedom")
+    .replace(/\bSavorOne\b/i, "Savor")
+    .replace(/\bVenture X\b/i, "Venture X")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = cleaned.split(" ").filter(Boolean);
+  return words.length > 3 ? words.slice(0, 3).join(" ") : cleaned;
 }
 
 function toTitleCaseLabel(value: string) {
@@ -871,6 +886,8 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
   const runnersToShow = showAllRunners ? recommendations.slice(1) : recommendations.slice(1, 4);
   const winner = recommendations[0];
   const runnerUp = recommendations[1];
+  const winnerLabel = winner ? formatTightCardLabel(getShortCardLabel(activeCreditCards, winner) || winner.name) : "";
+  const runnerUpLabel = runnerUp ? formatTightCardLabel(getShortCardLabel(activeCreditCards, runnerUp) || runnerUp.name) : "";
   const recentMerchantChips = searchHistory.slice(0, 4);
   const spendAmountValue = parseFloat(spendAmount) || 0;
   const winnerEdge = winner && runnerUp ? Math.max(0, winner.effectiveYield - runnerUp.effectiveYield) : 0;
@@ -1606,7 +1623,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center", marginTop: 8 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 16, fontWeight: 900, color: T.text.primary, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-                        {winner.name}
+                        {winnerLabel || winner.name}
                       </div>
                       <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
                         {formatRewardRate(winner.currentMultiplier, winner.currency)}
@@ -1614,7 +1631,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     </div>
                     <div style={{ width: 94, flexShrink: 0 }}>
                       <RewardCardVisual
-                        card={winner}
+                        card={{ ...winner, name: winnerLabel || winner.name }}
                         size="mini"
                         subtitle={winner.institution || "Best pick"}
                         highlight={formatRewardRateShort(winner.currentMultiplier, winner.currency)}
@@ -1628,7 +1645,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                     {runnerUp ? `${winnerEdge.toFixed(1)}%` : "Only option"}
                   </div>
                   <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 6 }}>
-                    {runnerUp ? rewardGap ? `About $${rewardGap} more than ${runnerUp.name} on this purchase.` : `${runnerUp.name} is next in line.` : "No second card in this wallet."}
+                    {runnerUp ? rewardGap ? `About $${rewardGap} more than ${runnerUpLabel || runnerUp.name} on this purchase.` : `${runnerUpLabel || runnerUp.name} is next in line.` : "No second card in this wallet."}
                   </div>
                 </div>
                 <div style={{ padding: "12px 12px 11px", borderRadius: 18, border: `1px solid ${T.border.subtle}`, background: T.bg.surface, gridColumn: isTablet ? "auto" : "1 / -1" }}>
@@ -1711,7 +1728,7 @@ export default function CardWizardTab({ proEnabled = false, embedded = false }: 
                       ${winnerReturn}
                     </div>
                     <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.45, marginTop: 4 }}>
-                      {runnerUpReturn ? `${runnerUp?.name} earns $${runnerUpReturn}.` : "No backup card to compare."}
+                      {runnerUpReturn ? `${runnerUpLabel || runnerUp?.name} earns $${runnerUpReturn}.` : "No backup card to compare."}
                     </div>
                   </div>
                 ) : null}

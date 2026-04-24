@@ -219,7 +219,7 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     borderBottom: collapsedSections.investments ? "none" : `1px solid ${T.border.subtle}`,
                 }}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
                     <div
                         style={{
                             width: 28,
@@ -234,22 +234,32 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                     >
                         <TrendingUp size={14} color={T.accent.emerald} />
                     </div>
-                    <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em" }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 800, color: T.text.primary, letterSpacing: "-0.01em", whiteSpace: "nowrap", flexShrink: 0 }}>
                         Investments
                     </h2>
                     {includedInvestmentSourceCount > 0 && (
                         <Badge
                             variant="outline"
-                            style={{ fontSize: 9, color: T.accent.emerald, borderColor: `${T.accent.emerald}35`, background: `${T.accent.emerald}10` }}
+                            style={{
+                                fontSize: 9,
+                                color: T.accent.emerald,
+                                borderColor: `${T.accent.emerald}35`,
+                                background: `${T.accent.emerald}10`,
+                                flexShrink: 1,
+                                minWidth: 0,
+                                maxWidth: 86,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                            }}
                         >
-                            {includedInvestmentSourceCount} {includedInvestmentSourceCount === 1 ? "SOURCE" : "SOURCES"}
+                            {includedInvestmentSourceCount} {includedInvestmentSourceCount === 1 ? "SRC" : "SRCS"}
                         </Badge>
                     )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flexShrink: 0 }}>
                     <Badge
                         variant="outline"
-                        style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40` }}
+                        style={{ fontSize: 10, color: T.accent.emerald, borderColor: `${T.accent.emerald}40`, maxWidth: 104, overflow: "hidden", textOverflow: "ellipsis" }}
                     >
                         {fmt(Math.round(investTotalValue))}
                     </Badge>
@@ -270,7 +280,10 @@ export default function InvestmentsSection({ collapsedSections, setCollapsedSect
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                padding: 4,
+                                minWidth: 28,
+                                width: 28,
+                                height: 28,
+                                padding: 0,
                                 opacity: refreshingPrices || !manualRefreshStatus.allowed ? 0.45 : 0.8,
                                 transition: "opacity 0.2s",
                             }}

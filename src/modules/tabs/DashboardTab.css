@@ -71,6 +71,115 @@
   }
 }
 
+@keyframes runwaySweep {
+  0% {
+    transform: translateX(-42%);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: translateX(88%);
+    opacity: 0;
+  }
+}
+
+@keyframes radarSweep {
+  0% {
+    transform: rotate(-36deg);
+    opacity: 0.34;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: rotate(324deg);
+    opacity: 0.34;
+  }
+}
+
+.money-runway-card,
+.cash-radar-card {
+  isolation: isolate;
+}
+
+.money-runway-card > *,
+.cash-radar-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.money-runway-card::before,
+.cash-radar-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(155, 108, 255, 0.20), transparent 34%),
+    radial-gradient(circle at 86% 18%, rgba(67, 241, 154, 0.15), transparent 36%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  z-index: 0;
+}
+
+.cash-radar-card::after {
+  content: "";
+  position: absolute;
+  right: -28px;
+  top: 24px;
+  width: 150px;
+  height: 150px;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    linear-gradient(100deg, rgba(67, 241, 154, 0.30), transparent 52%),
+    repeating-radial-gradient(circle, rgba(114, 215, 255, 0.12) 0 1px, transparent 1px 24px);
+  transform-origin: 50% 50%;
+  animation: radarSweep 8s linear infinite;
+  opacity: 0.42;
+  z-index: 0;
+}
+
+.runway-rail {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(67, 241, 154, 0.24), rgba(155, 108, 255, 0.20)),
+    repeating-linear-gradient(90deg, transparent 0 17px, rgba(114, 215, 255, 0.18) 17px 19px);
+  border: 1px solid rgba(114, 215, 255, 0.12);
+}
+
+.runway-rail::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  width: 58%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(114, 215, 255, 0.48), transparent);
+  animation: runwaySweep 4.6s ease-in-out infinite;
+}
+
+.radar-chip {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runway-rail::before,
+  .cash-radar-card::after {
+    animation: none;
+  }
+}
+
 .hover-lift {
   transition:
     transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),

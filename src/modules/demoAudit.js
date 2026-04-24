@@ -10,6 +10,12 @@ function currency(amount) {
   })}`;
 }
 
+function pctOfTotal(amount, total) {
+  const safeTotal = Number(total) || 0;
+  if (safeTotal <= 0) return "0%";
+  return `${Math.round(((Number(amount) || 0) / safeTotal) * 100)}%`;
+}
+
 function getScenarioHouseholdLabel(scenario) {
   const name = String(scenario?.scenarioMeta?.name || "").trim();
   if (name) return `The ${name} household`;
@@ -91,7 +97,15 @@ function buildCurrentDemoAuditJson({
     : `Move ${currency(primaryActionAmount)} from Checking to Vanguard Brokerage today, then leave the protected ${currency(operatingFloor)} floor untouched until the next payday.`;
 
   const spendingTotal = Object.values(budgetActuals).reduce((sum, value) => sum + (Number(value) || 0), 0);
-  const spendingDelta = Math.max(0, weeklyAllowance - spendingTotal);
+  const spendingDelta = weeklyAllowance - spendingTotal;
+  const spendingDeltaLabel = `${spendingDelta >= 0 ? "UNDER" : "OVER"} by ${currency(Math.abs(spendingDelta))}`;
+  const topCategories = Object.entries(budgetActuals || {})
+    .sort(([, leftAmount], [, rightAmount]) => (Number(rightAmount) || 0) - (Number(leftAmount) || 0))
+    .map(([category, amount]) => ({
+      category,
+      amount: currency(amount),
+      pctOfTotal: pctOfTotal(amount, spendingTotal),
+    }));
   const radar = renewals.map((renewal) => ({
     item: renewal.name,
     amount: currency(renewal.amount),
@@ -273,14 +287,8 @@ function buildCurrentDemoAuditJson({
     spendingAnalysis: {
       totalSpent: currency(spendingTotal),
       dailyAverage: currency(spendingTotal / 7),
-      vsAllowance: `UNDER by ${currency(spendingDelta)}`,
-      topCategories: [
-        { category: "Groceries", amount: currency(budgetActuals.Groceries), pctOfTotal: "39%" },
-        { category: "Shopping", amount: currency(budgetActuals.Shopping), pctOfTotal: "19%" },
-        { category: "Dining", amount: currency(budgetActuals.Dining), pctOfTotal: "17%" },
-        { category: "Transport", amount: currency(budgetActuals.Transport), pctOfTotal: "13%" },
-        { category: "Entertainment", amount: currency(budgetActuals.Entertainment), pctOfTotal: "12%" },
-      ],
+      vsAllowance: spendingDeltaLabel,
+      topCategories,
       alerts: [hasDebt ? "Spending is below the weekly allowance, which creates real payoff room without undercutting the floor." : "Spending is below the weekly allowance, so surplus can keep flowing to wealth building."],
       debtImpact: hasDebt
         ? `${currency(debtTotal)} of revolving debt is the main drag right now, so Catalyst is treating payoff as the highest-return move.`

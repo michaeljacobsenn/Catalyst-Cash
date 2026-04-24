@@ -14,25 +14,25 @@ export const BUDGET_BUCKET_CONFIG = {
     label: "Bills",
     emoji: "🧾",
     description: "Rent, minimums, insurance, recurring obligations",
-    color: "#7C6FFF",
+    color: "#9B6CFF",
   },
   needs: {
     label: "Needs",
     emoji: "🛒",
     description: "Groceries, fuel, transit, healthcare, essentials",
-    color: "#20B99A",
+    color: "#43F19A",
   },
   wants: {
     label: "Wants",
     emoji: "✨",
     description: "Dining, shopping, travel, entertainment",
-    color: "#FF8A4C",
+    color: "#72D7FF",
   },
   savings: {
     label: "Savings Goals",
     emoji: "🎯",
     description: "Emergency fund, sinking funds, investing",
-    color: "#F4B740",
+    color: "#A78BFA",
   },
 };
 

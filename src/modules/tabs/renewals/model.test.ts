@@ -159,6 +159,21 @@ describe("renewals model", () => {
     expect(calculateMonthlyRenewalTotal(items as never[])).toBeCloseTo(101.6, 1);
   });
 
+  it("renders legacy demo categories that still count as active", () => {
+    const groups = buildRenewalGroups(
+      [
+        { name: "Internet", amount: 68, interval: 1, intervalUnit: "months", category: "utilities" },
+        { name: "Gym Membership", amount: 49, interval: 1, intervalUnit: "months", category: "health" },
+        { name: "Spotify Family", amount: 19.99, interval: 1, intervalUnit: "months", category: "subs" },
+      ] as never[],
+      { sortBy: "type", showInactive: false, categoryMeta }
+    );
+
+    expect(groups.find((group) => group.id === "housing")?.items.map((item) => item.name)).toContain("Internet");
+    expect(groups.find((group) => group.id === "medical")?.items.map((item) => item.name)).toContain("Gym Membership");
+    expect(groups.find((group) => group.id === "subs")?.items.map((item) => item.name)).toContain("Spotify Family");
+  });
+
   it("keeps inactive items hidden even in alternate sort modes unless explicitly requested", () => {
     const items = [
       {

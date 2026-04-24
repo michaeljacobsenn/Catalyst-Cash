@@ -112,21 +112,22 @@ export default function DashboardOverview({
     <>
       <Card
         animate
-        className="hover-card a11y-hit-target"
+        className="hover-card a11y-hit-target money-runway-card"
         onClick={onOpenPortfolio}
         style={{
           padding: isSmallPhone ? "18px 16px" : "22px 20px",
           marginBottom: 14,
-          background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
-          border: `1px solid ${T.border.default}`,
+          background: `linear-gradient(155deg, ${T.bg.card} 0%, ${T.bg.elevated} 54%, ${T.bg.surface} 100%)`,
+          border: `1px solid ${T.accent.primary}30`,
           cursor: "pointer",
           position: "relative",
-          overflow: "visible",
+          overflow: "hidden",
+          boxShadow: `0 20px 48px rgba(0,0,0,0.30), inset 0 1px 0 rgba(114,215,255,0.07)`,
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: T.text.dim, letterSpacing: "0.10em", fontFamily: T.font.mono, textTransform: "uppercase" }}>
-            Weekly Snapshot
+          <span style={{ fontSize: 10, fontWeight: 850, color: T.accent.primary, letterSpacing: "0.14em", fontFamily: T.font.mono, textTransform: "uppercase" }}>
+            Money Runway
           </span>
           <button type="button"
             onClick={(event) => {
@@ -139,9 +140,11 @@ export default function DashboardOverview({
               gap: score > 0 ? 6 : 5,
               padding: "6px 10px",
               borderRadius: 99,
-              background: score > 0 ? `${scoreColor}10` : `${T.bg.surface}`,
-              border: `1px solid ${score > 0 ? `${scoreColor}20` : T.border.default}`,
+              background: score > 0 ? `${scoreColor}12` : `rgba(114,215,255,0.055)`,
+              border: `1px solid ${score > 0 ? `${scoreColor}28` : T.border.default}`,
               cursor: "pointer",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
             }}
           >
             {score > 0 ? (
@@ -164,30 +167,41 @@ export default function DashboardOverview({
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 14,
-            background: `linear-gradient(180deg, ${T.bg.elevated} 0%, ${T.bg.card} 100%)`,
-            border: `1px solid ${T.border.default}`,
+            gap: 16,
+            background: `linear-gradient(180deg, rgba(114,215,255,0.055) 0%, rgba(155,108,255,0.025) 100%)`,
+            border: `1px solid rgba(114,215,255,0.12)`,
             borderRadius: T.radius.lg,
             padding: isSmallPhone ? "16px 14px 18px" : "20px 18px 22px",
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
+            boxShadow: `inset 0 1px 0 rgba(114,215,255,0.06)`,
             marginBottom: 8,
+            position: "relative",
           }}
         >
           <div>
-            <h2 style={{ fontSize: 11, fontWeight: 800, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6, fontFamily: T.font.mono }}>
-              Net Worth
+            <h2 style={{ fontSize: 11, fontWeight: 850, color: T.text.dim, textTransform: "uppercase", letterSpacing: "0.10em", marginBottom: 7, fontFamily: T.font.mono }}>
+              Capital Position
             </h2>
             <div
               style={{
                 fontSize: isCompactWidth ? "clamp(28px, 8.2vw, 34px)" : "clamp(30px, 9vw, 36px)",
-                fontWeight: 850,
+                fontWeight: 900,
                 color: privacyMode ? T.text.dim : T.text.primary,
                 letterSpacing: "-0.04em",
                 overflowWrap: "anywhere",
                 lineHeight: 1.02,
+                fontFamily: T.font.display,
               }}
             >
               {privacyMode ? "••••••" : fmt(netWorth)}
+            </div>
+          </div>
+          <div className="runway-rail" aria-hidden="true" />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11, color: T.text.secondary, lineHeight: 1.35 }}>
+              Spendable runway: <strong style={{ color: privacyMode ? T.text.dim : safeColor, fontWeight: 850 }}>{privacyMode ? "••••" : fmt(Math.max(0, safetySnapshot.safeToSpend))}</strong>
+            </div>
+            <div className="radar-chip" style={{ padding: "6px 9px", borderRadius: 999, border: `1px solid ${safeColor}24`, color: safeColor, background: `${safeColor}10`, fontSize: 10, fontWeight: 850, fontFamily: T.font.mono, letterSpacing: "0.05em" }}>
+              {safetySnapshot.level === "urgent" ? "ACTION" : safetySnapshot.level === "caution" ? "WATCH" : "CLEAR"}
             </div>
           </div>
         </div>
@@ -216,17 +230,17 @@ export default function DashboardOverview({
             style={{
               padding: "13px 11px 12px",
               background: `linear-gradient(180deg, ${T.bg.card}, ${T.bg.elevated})`,
-              border: `1px solid ${T.border.default}`,
+              border: `1px solid ${index === 0 ? `${metric.color}30` : T.border.default}`,
               borderRadius: T.radius.lg,
               textAlign: "center",
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+              boxShadow: `inset 0 1px 0 rgba(114,215,255,0.045)`,
               gridColumn: isCompactWidth && metrics.length % 2 === 1 && index === metrics.length - 1 ? "1 / -1" : "auto",
             }}
           >
             <div style={{ fontSize: 9, fontWeight: 800, color: T.text.dim, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 5, fontFamily: T.font.mono }}>
               {metric.label}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 850, color: privacyMode ? T.text.dim : metric.color, fontFamily: T.font.mono, letterSpacing: "-0.02em" }}>
+            <div style={{ fontSize: 14, fontWeight: 900, color: privacyMode ? T.text.dim : metric.color, fontFamily: index === 0 ? T.font.display : T.font.mono, letterSpacing: "-0.02em" }}>
               {privacyMode ? "••••" : fmt(metric.value)}
             </div>
           </div>

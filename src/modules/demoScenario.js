@@ -85,6 +85,8 @@ const DEMO_SCENARIO_PRESETS = {
       { daysAgo: 3, amount: 39.42, description: "Shell", category: "Transport" },
       { daysAgo: 4, amount: 44.91, description: "Target", category: "Shopping" },
       { daysAgo: 5, amount: 27.65, description: "AMC Theatres", category: "Entertainment" },
+      { daysAgo: 6, amount: 90.36, description: "Costco", category: "Groceries" },
+      { daysAgo: 6, amount: 24.9, description: "Sweetgreen", category: "Dining" },
     ],
     pendingCharges: [
       { amount: "42.60", description: "Electric utility autopay", confirmed: true },
@@ -193,6 +195,8 @@ const DEMO_SCENARIO_PRESETS = {
       { daysAgo: 3, amount: 37.9, description: "Shell", category: "Transport" },
       { daysAgo: 4, amount: 21.34, description: "Target", category: "Shopping" },
       { daysAgo: 5, amount: 18.5, description: "AMC Theatres", category: "Entertainment" },
+      { daysAgo: 6, amount: 88.2, description: "Costco", category: "Groceries" },
+      { daysAgo: 6, amount: 21.76, description: "Coffee Run", category: "Dining" },
     ],
     pendingCharges: [
       { amount: "42.60", description: "Electric utility autopay", confirmed: true },
@@ -319,6 +323,8 @@ const DEMO_SCENARIO_PRESETS = {
       { daysAgo: 3, amount: 62.4, description: "Chevron", category: "Transport" },
       { daysAgo: 4, amount: 91.25, description: "Target", category: "Shopping" },
       { daysAgo: 5, amount: 61.02, description: "AMC Theatres", category: "Entertainment" },
+      { daysAgo: 6, amount: 133.84, description: "Costco", category: "Groceries" },
+      { daysAgo: 6, amount: 48.11, description: "Date Night", category: "Dining" },
     ],
     pendingCharges: [
       { amount: "128.24", description: "Electric utility autopay", confirmed: true },
@@ -448,6 +454,8 @@ const DEMO_SCENARIO_PRESETS = {
       { daysAgo: 3, amount: 62.4, description: "Chevron", category: "Transport" },
       { daysAgo: 4, amount: 91.25, description: "Target", category: "Shopping" },
       { daysAgo: 5, amount: 61.02, description: "AMC Theatres", category: "Entertainment" },
+      { daysAgo: 6, amount: 133.84, description: "Costco", category: "Groceries" },
+      { daysAgo: 6, amount: 48.11, description: "Date Night", category: "Dining" },
     ],
     pendingCharges: [
       { amount: "128.24", description: "Electric utility autopay", confirmed: true },
@@ -512,6 +520,7 @@ function buildCards(cards = [], scenarioId, today) {
     nickname: card.nickname,
     mask: card.mask,
     balance: Number(card.balance) || 0,
+    type: "credit",
     limit: card.limit,
     apr: card.apr,
     minPayment: Number(card.minPayment) || 0,
@@ -554,6 +563,7 @@ function buildRenewals(renewals = [], scenarioId, today, cards, bankAccounts) {
       nextDue: addDays(today, renewal.dueOffset || 30),
       category: renewal.category,
       chargedTo: linkedCard?.name || linkedBank?.name || "Checking",
+      chargedToId: linkedCard?.id || linkedBank?.id || "",
       chargedToType: renewal.chargedToType,
     };
   });
@@ -637,6 +647,7 @@ export function buildDemoScenario(referenceDate = new Date(), scenarioId = getDe
     trackChecking: true,
     trackSavings: true,
     trackBrokerage: true,
+    trackRoth: true,
     trackRothContributions: true,
     track401k: true,
     trackCrypto: false,

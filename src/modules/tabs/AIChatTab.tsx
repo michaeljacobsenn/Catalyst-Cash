@@ -1144,6 +1144,7 @@ export default memo(function AIChatTab({
                 width: "100%",
                 margin: compactEmbedded ? "0 -8px" : "0 -10px",
                 padding: compactEmbedded ? "0 8px" : "0 10px",
+                paddingBottom: ultraDenseEmbedded ? 10 : denseEmbedded ? 12 : 16,
               }}
             >
               <div
@@ -1586,13 +1587,14 @@ export default memo(function AIChatTab({
             style={{
               marginBottom: 10,
               display: "flex",
-              alignItems: "center",
+              alignItems: !proEnabled ? "stretch" : "center",
               justifyContent: "space-between",
               gap: 10,
               padding: "9px 12px",
               borderRadius: 14,
               background: `${chatQuotaTone}10`,
               border: `1px solid ${chatQuotaTone}24`,
+              flexWrap: "wrap",
             }}
           >
             <div style={{ minWidth: 0 }}>
@@ -1602,12 +1604,44 @@ export default memo(function AIChatTab({
               <div style={{ fontSize: 12, fontWeight: 700, color: T.text.primary, marginTop: 2 }}>
                 {chatQuotaStatusCopy}
               </div>
+              {!proEnabled && (
+                <div style={{ fontSize: 11, color: T.text.secondary, marginTop: 4, lineHeight: 1.35 }}>
+                  Pro unlocks 30 Ask AI chats/day, CFO reasoning, and Boardroom depth.
+                </div>
+              )}
             </div>
-            <div style={{ minWidth: 82, textAlign: "right" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary }}>
-                {chatQuotaModelLabel}
+            <div style={{ minWidth: !proEnabled ? 128 : 82, textAlign: "right", marginLeft: "auto" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.text.secondary }}>
+                  {chatQuotaModelLabel}
+                </div>
+                {!proEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaywall(true)}
+                    className="hover-btn"
+                    style={{
+                      minHeight: 30,
+                      minWidth: 0,
+                      padding: "6px 10px",
+                      borderRadius: 999,
+                      border: `1px solid ${T.accent.primary}36`,
+                      background: `${T.accent.primary}14`,
+                      color: T.accent.primary,
+                      fontSize: 10,
+                      fontWeight: 850,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      gap: 5,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <Sparkles size={11} />
+                    Pro
+                  </button>
+                )}
               </div>
-              <div style={{ marginTop: 6, width: 82, height: 5, background: T.border.subtle, borderRadius: 999, overflow: "hidden" }}>
+              <div style={{ marginTop: 6, width: "100%", height: 5, background: T.border.subtle, borderRadius: 999, overflow: "hidden" }}>
                 <div
                   style={{
                     height: "100%",
@@ -1798,8 +1832,8 @@ export default memo(function AIChatTab({
             marginTop: 8,
             padding: "10px 14px",
             borderRadius: 14,
-            background: "rgba(220,177,91,0.08)",
-            border: "1px solid rgba(220,177,91,0.22)",
+            background: `${T.accent.primary}10`,
+            border: `1px solid ${T.accent.primary}26`,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
