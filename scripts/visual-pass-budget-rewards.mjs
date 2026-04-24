@@ -245,11 +245,6 @@ const SEEDED_CHAT_FEEDBACK = {
     reasons: [],
     updatedAt: SEEDED_NOW - 45 * 1000,
   },
-  [String(SEEDED_CHAT_HISTORY[3].ts)]: {
-    verdict: "needs-work",
-    reasons: ["too_generic", "missed_context"],
-    updatedAt: SEEDED_NOW - 30 * 1000,
-  },
 };
 
 const SEEDED_STORAGE = {

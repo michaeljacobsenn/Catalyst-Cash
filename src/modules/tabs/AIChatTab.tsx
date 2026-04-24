@@ -25,7 +25,7 @@ import { T } from "../constants.js";
 import { evaluateChatDecisionRules } from "../decisionRules.js";
 import { generateStrategy, mergeSnapshotDebts } from "../engine.js";
 import { haptic } from "../haptics.js";
-import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, MessageCircle, Sparkles, Trash2 } from "../icons";
+import { AlertTriangle, ArrowDown, ArrowUpRight, CheckCircle2, Sparkles, Trash2 } from "../icons";
 import { log } from "../logger.js";
 import { extractMemoryTags, extractUserMemoryFacts } from "../memory.js";
 import { isLikelyNetworkError, isLikelyProviderAvailabilityError, toUserFacingRequestError } from "../networkErrors.js";
@@ -56,7 +56,6 @@ import {
   getEffectiveChatModel,
   readChatFeedbackStore,
   recordChatFeedback,
-  toggleChatFeedbackReason,
   type AssistantPhase,
   type ChatFeedbackReason,
   type ChatFeedbackStore,
@@ -858,21 +857,6 @@ export default memo(function AIChatTab({
     []
   );
 
-  const toggleMessageFeedbackReason = useCallback((messageId: string, reason: ChatFeedbackReason): void => {
-    setMessageFeedback((prev) => {
-      const next = toggleChatFeedbackReason(prev, messageId, reason);
-      if (next === prev) return prev;
-      void db.set(CHAT_FEEDBACK_KEY, next);
-      log.info("chat", "Chat response feedback updated", {
-        verdict: "needs-work",
-        reasons: next[messageId]?.reasons || [],
-        messageId,
-      });
-      return next;
-    });
-    haptic.selection();
-  }, []);
-
   const requestFeedbackRevision = useCallback(
     (assistantIndex: number, reasons: ChatFeedbackReason[] = []): void => {
       const assistantMessage = messages[assistantIndex];
@@ -1038,7 +1022,7 @@ export default memo(function AIChatTab({
               ? compactEmbedded
                 ? "4px 14px 18px"
                 : "10px 14px 22px"
-              : "16px 14px",
+              : "58px 14px 16px",
           display: "flex",
           flexDirection: "column",
           gap: 6,
@@ -1222,6 +1206,8 @@ export default memo(function AIChatTab({
               const isLatestAssistant = !isUser && i === messages.length - 1 && isStreaming;
               const feedbackMessageId = !isUser && typeof msg.ts === "number" ? String(msg.ts) : null;
               const feedback = feedbackMessageId ? messageFeedback[feedbackMessageId] : null;
+              const hasLaterAssistant = !isUser && messages.slice(i + 1).some((candidate) => candidate.role === "assistant");
+              const shouldShowFeedback = Boolean(feedbackMessageId && !isLatestAssistant && !hasLaterAssistant);
               // Detect if previous or next message is from the same sender to adjust corner radiuses beautifully
               const prevIsSame = messages[i - 1]?.role === msg.role;
               const nextIsSame = messages[i + 1]?.role === msg.role;
@@ -1280,19 +1266,28 @@ export default memo(function AIChatTab({
                       </div>
                     )}
                   </div>
-                  {!isUser && !isLatestAssistant && feedbackMessageId && (
+                  {shouldShowFeedback && feedbackMessageId && (
                     <div
                       style={{
-                        marginTop: 8,
+                        marginTop: 7,
                         marginLeft: 6,
                         display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-start",
-                        gap: 8,
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
                         maxWidth: "88%",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span
+                        style={{
+                          color: T.text.dim,
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          letterSpacing: "-0.01em",
+                        }}
+                      >
+                        Was this useful?
+                      </span>
                         <button
                           type="button"
                           onClick={() => recordMessageFeedback(feedbackMessageId, "helpful")}
@@ -1312,20 +1307,23 @@ export default memo(function AIChatTab({
                             fontSize: 11,
                             fontWeight: 700,
                             cursor: "pointer",
+                            transition: "border-color .2s ease, background-color .2s ease, color .2s ease",
                           }}
                         >
                           <CheckCircle2 size={12} />
-                          Helpful
+                          Yes
                         </button>
                         <button
                           type="button"
-                          onClick={() =>
-                            recordMessageFeedback(
-                              feedbackMessageId,
-                              "needs-work",
-                              feedback?.verdict === "needs-work" ? feedback.reasons : []
-                            )
-                          }
+                          onClick={() => {
+                            const revisionReasons: ChatFeedbackReason[] =
+                              feedback?.verdict === "needs-work" && feedback.reasons.length > 0
+                                ? feedback.reasons
+                                : ["missed_context"];
+                            recordMessageFeedback(feedbackMessageId, "needs-work", revisionReasons);
+                            requestFeedbackRevision(i, revisionReasons);
+                          }}
+                          disabled={isStreaming}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -1334,90 +1332,24 @@ export default memo(function AIChatTab({
                             borderRadius: 999,
                             border:
                               feedback?.verdict === "needs-work"
-                                ? `1px solid ${T.status.amber}40`
+                                ? `1px solid ${T.accent.primary}45`
                                 : `1px solid ${T.border.subtle}`,
                             background:
-                              feedback?.verdict === "needs-work" ? `${T.status.amber}14` : T.bg.surface,
-                            color: feedback?.verdict === "needs-work" ? T.status.amber : T.text.secondary,
+                              feedback?.verdict === "needs-work" ? `${T.accent.primary}14` : T.bg.surface,
+                            color: feedback?.verdict === "needs-work" ? T.accent.primary : T.text.secondary,
                             fontSize: 11,
                             fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <MessageCircle size={12} />
-                          Needs work
-                        </button>
-                      </div>
-                      {feedback?.verdict === "needs-work" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: T.text.dim,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.08em",
-                            }}
-                          >
-                            What missed?
-                          </span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            {CHAT_FEEDBACK_REASON_OPTIONS.map((option) => {
-                              const selected = feedback.reasons.includes(option.value);
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => toggleMessageFeedbackReason(feedbackMessageId, option.value)}
-                                  style={{
-                                    padding: "5px 9px",
-                                    borderRadius: 999,
-                                    border: selected
-                                      ? `1px solid ${T.status.amber}50`
-                                      : `1px solid ${T.border.subtle}`,
-                                    background: selected ? `${T.status.amber}14` : T.bg.surface,
-                                    color: selected ? T.status.amber : T.text.secondary,
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {option.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      {feedback?.verdict === "needs-work" && (
-                        <button
-                          type="button"
-                          onClick={() => requestFeedbackRevision(i, feedback.reasons)}
-                          disabled={isStreaming}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "6px 11px",
-                            borderRadius: 999,
-                            border: `1px solid ${T.accent.primary}35`,
-                            background: `${T.accent.primary}12`,
-                            color: T.accent.primary,
-                            fontSize: 11,
-                            fontWeight: 800,
                             cursor: isStreaming ? "not-allowed" : "pointer",
                             opacity: isStreaming ? 0.55 : 1,
+                            transition: "border-color .2s ease, background-color .2s ease, color .2s ease",
                           }}
                         >
                           <ArrowUpRight size={12} />
-                          Improve answer
+                          Improve
                         </button>
-                      )}
-                      {feedback && (
-                        <span style={{ fontSize: 10, color: T.text.dim, fontWeight: 600 }}>
-                          {feedback.verdict === "helpful"
-                            ? "Catalyst will lean toward this style in future replies on this device."
-                            : "Catalyst will use this feedback to tighten future replies on this device."}
+                      {feedback?.verdict === "helpful" && (
+                        <span style={{ color: T.text.dim, fontSize: 10.5, fontWeight: 700 }}>
+                          Saved
                         </span>
                       )}
                     </div>
