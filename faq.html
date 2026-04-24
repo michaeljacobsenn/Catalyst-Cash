@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0C121B" />
+  <title>Catalyst Cash FAQ | Switching, rewards, sync, privacy, and plan questions</title>
+  <meta name="description"
+    content="Get clear answers about switching to Catalyst Cash, rewards, Plaid sync, privacy, backups, demo mode, and plan limits." />
+  <meta property="og:title" content="Catalyst Cash FAQ" />
+  <meta property="og:description"
+    content="A practical FAQ for people moving from dashboard-first finance apps into a weekly money system." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://catalystcash.app/faq.html" />
+  <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
+  <link rel="canonical" href="https://catalystcash.app/faq.html" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <meta name="robots" content="index, follow" />
+  <link rel="stylesheet" href="/style.css?v=3.7" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Catalyst Cash a replacement for Mint, Monarch, Rocket Money, or YNAB?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Catalyst Cash replaces the weekly decision layer: current balances, debt pressure, renewals, audit summaries, and follow-up questions. It is strongest when you want clearer next moves instead of a dashboard you have to interpret yourself."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need Plaid to use the app well?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Plaid is optional. Manual entry still supports the core audit, debt, budgeting, renewals, and planning workflow."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I import my full history from another finance app?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Not as a direct external CSV or app-to-app migration yet. Catalyst Cash supports encrypted backup and restore of its own data, while external migrations are best handled by keeping your export and starting the current decision workflow inside Catalyst Cash."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can Catalyst Cash help me choose the best card before I pay?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. The Rewards tab ranks the best card for a merchant or category, compares the lead over your backup card, and supports nearby merchant suggestions when several stores are close together."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the budget start blank?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Catalyst Cash can seed starter budget lines from recurring bills and audit context without overwriting the lines you already built."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where does my data live?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Your core financial record stays local-first on your device. AI requests are scrubbed and routed through the Catalyst backend, and Plaid tokens stay off-device."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does Ask AI feedback do?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Helpful and needs-work feedback stays on-device and helps Catalyst adjust future Ask AI replies to fit your preferred style more closely. It can also trigger an immediate improved answer without sending product telemetry built from your private chat history."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does Pro unlock?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 8 Plaid institutions, quieter balance and ledger upkeep, the full audit archive, the full searchable ledger with export, and the premium AI models. Available at $12.99/month, $109.99/year, or $199.99 for lifetime access."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is there a lifetime plan?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. A one-time payment of $199.99 gives you permanent Pro access with no subscription, no renewals, and no recurring charges. It pays for itself in under 16 months compared with the monthly plan."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does the referral program work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Share your referral code from Settings. When a friend signs up with your code, you both get one free month of Pro. You can earn up to 12 bonus months through referrals."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+
+<body>
+  <a href="#main-content" class="skip-link"
+    style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#0C121B;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
+    onfocus="this.style.top='12px'" onblur="this.style.top='-100%'">Skip to content</a>
+  <div class="accent-line"></div>
+  <div id="mobile-overlay" class="mobile-overlay"></div>
+
+  <div class="page">
+    <nav role="navigation" aria-label="Main navigation">
+      <div class="nav-inner">
+        <a href="/" class="brand">
+          <img src="/icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="eager" />
+          Catalyst Cash
+        </a>
+        <button class="hamburger" id="hamburger-btn" aria-label="Toggle navigation menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a href="/">Home</a>
+          <a href="/compare.html">Compare</a>
+          <a href="/guide.html">Guide</a>
+          <a href="/faq.html">FAQ</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="/terms.html">Terms</a>
+          <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="shell" id="main-content" data-faq-root>
+      <section class="faq-hero" aria-label="FAQ hero">
+        <div class="faq-copy faq-copy-minimal fade-up">
+          <div class="eyebrow">FAQ | updated April 21, 2026</div>
+          <h1>Clear answers before you trust a new money app.</h1>
+          <p class="hero-sub">
+            Search switching, rewards, sync, privacy, backup, and plan questions without digging through marketing copy.
+          </p>
+        </div>
+
+        <div class="faq-search-panel fade-up delay-2">
+          <div class="faq-search-top">
+            <div>
+              <div class="micro-label">Smart Search</div>
+              <h2>Search the FAQ</h2>
+            </div>
+            <p>Try “bank not syncing”, “best card nearby”, “budget setup”, or “Pro”.</p>
+          </div>
+
+          <div class="faq-search-field">
+            <input
+              type="search"
+              id="faq-search"
+              data-faq-input
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Search switching, rewards, sync, privacy, backups, pricing, or audit questions" />
+            <button type="button" class="faq-clear" data-faq-clear hidden>Clear</button>
+          </div>
+
+          <div class="faq-chip-row" aria-label="Popular searches">
+            <button type="button" class="faq-chip" data-faq-query="Mint">Mint</button>
+            <button type="button" class="faq-chip" data-faq-query="bank not syncing">Bank sync</button>
+            <button type="button" class="faq-chip" data-faq-query="best card nearby">Best card nearby</button>
+            <button type="button" class="faq-chip" data-faq-query="budget setup">Budget setup</button>
+            <button type="button" class="faq-chip" data-faq-query="backup and restore">Backup and restore</button>
+            <button type="button" class="faq-chip" data-faq-query="what does Pro unlock">Pro</button>
+          </div>
+
+          <div class="faq-search-meta">
+            <div class="faq-search-results" data-faq-results>Browse answers across the full FAQ.</div>
+          </div>
+
+          <div class="faq-empty" data-faq-empty hidden>
+            <strong>No direct match found.</strong> Try shorter ideas like "bank", "rewards", "backup", "budget", or "Pro".
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top: 18px;">
+        <div class="faq-groups">
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Switching</div>
+              <h2>Switching from another app</h2>
+              <p>What to keep, what to skip, and how to get useful value fast.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="switching" data-keywords="mint credit karma monarch rocket money ynab replacement move migration switch weekly decision dashboard budgeting subscriptions">
+                <summary>
+                  <span class="faq-question">Is Catalyst Cash a replacement for Mint, Monarch, Rocket Money, or YNAB?</span>
+                  <span class="faq-summary-tag">Fit</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Catalyst Cash replaces the weekly decision layer: current balances, debt pressure, renewals, audit summaries, and follow-up questions. It is strongest when you want clearer next moves instead of a dashboard you have to interpret yourself.</p>
+                  <p>If your main job is envelope budgeting down to every category or preserving a permanent cloud ledger as the product's center of gravity, you may keep your old tool during transition. If your main problem is not knowing what move matters most this week, Catalyst Cash is built for that.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="switching" data-keywords="rebuild setup categories transition start current balances bills recurring costs">
+                <summary>
+                  <span class="faq-question">Do I need to rebuild every category and budget line before the app becomes useful?</span>
+                  <span class="faq-summary-tag">Setup</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. The fastest path is to get today's truth accurate: current balances, major cards, income timing, and recurring costs. That is usually enough to produce a useful audit and a credible next-action list.</p>
+                  <p>Catalyst Cash is optimized around current decision quality, not making you finish a giant migration before the product can help.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="switching" data-keywords="import csv migration history export external app restore backup transaction history">
+                <summary>
+                  <span class="faq-question">Can I import my full history from another finance app?</span>
+                  <span class="faq-summary-tag">History</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Not as a direct external CSV or app-to-app migration yet. Catalyst Cash supports encrypted backup and restore of its own data, but it is not currently a universal importer for Mint, YNAB, Monarch, or Rocket Money exports.</p>
+                  <p>If preserving older records matters, keep the export from your previous tool while starting the current decision workflow here. The app is built to make your next week clearer first.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="switching" data-keywords="subscription tracking budgeting investing dashboard compare use case better fit">
+                <summary>
+                  <span class="faq-question">What if my previous app focused on subscriptions, budgeting, or dashboard reporting?</span>
+                  <span class="faq-summary-tag">Use Case</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Catalyst Cash still covers renewals, cash flow, debt, rewards, budgeting, FIRE math, and transaction cleanup. The difference is that those tools support one weekly operating rhythm instead of becoming separate systems you have to interpret yourself.</p>
+                  <p>If you want a plain-language breakdown of where Catalyst Cash fits best, the <a href="/compare.html">compare page</a> is the right follow-up.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Accounts and Sync</div>
+              <h2>Accounts and sync</h2>
+              <p>Plaid, refresh behavior, and what to expect when banks are messy.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="do I need plaid manual entry offline optional bank connect">
+                <summary>
+                  <span class="faq-question">Do I need Plaid to use the app well?</span>
+                  <span class="faq-summary-tag">Plaid</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. Plaid is optional. Manual entry still supports the core audit, debt, budgeting, renewals, and planning workflow.</p>
+                  <p>Plaid makes current balances and transactions easier to maintain, but the app is not designed around forcing you into one connection model.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="bank not syncing updating stale refresh reconnect institution provider down unavailable">
+                <summary>
+                  <span class="faq-question">What should I expect if a bank stops updating or will not connect?</span>
+                  <span class="faq-summary-tag">Banks</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>This happens across the category, not just here. Financial institutions change login flows, block aggregators, require re-auth, or recover slowly after outages. Catalyst Cash keeps the local record usable, so a temporary connection issue does not make the rest of the app meaningless.</p>
+                  <p>When a connection needs attention, reconnect it, keep the critical balances current, and continue running the workflow. The product is designed to degrade more gracefully than dashboard-only apps that become blank when sync has a bad day.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="refresh balance balances ledger transactions cache cached paid pull cost throttle throttled live sync">
+                <summary>
+                  <span class="faq-question">Why does refresh not always mean an instant live pull from the bank?</span>
+                  <span class="faq-summary-tag">Refresh</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Because good finance UX should not waste network calls just to feel busy. Catalyst Cash reads cached sync state first, keeps Pro balances and ledger data quietly refreshed in the background, and saves heavier liability refreshes for a slower cadence.</p>
+                  <p>That keeps the product more current without asking you to micromanage refreshes or forcing unnecessary paid pulls every time you open the app.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="next live sync cached waiting grouped statuses stale balance">
+                <summary>
+                  <span class="faq-question">What does “waiting for the next live sync” actually mean?</span>
+                  <span class="faq-summary-tag">Status</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>It means Catalyst still has a recent cached balance snapshot and is waiting for the next full live refresh window. The account is still usable; it is simply not forcing a fresh network pull every time you open the app.</p>
+                  <p>If several linked institutions share the same stale state, the app groups that status so you can see the pattern quickly instead of reading the same warning over and over.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="accounts sync" data-keywords="how many banks accounts institutions free pro limits one six">
+                <summary>
+                  <span class="faq-question">How many institutions can I connect?</span>
+                  <span class="faq-summary-tag">Limits</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Free supports 1 Plaid institution. Pro supports up to 8 Plaid institutions. Manual entry remains available either way.</p>
+                  <p>On Pro, Catalyst is built to keep all 8 usable without constant user input by quietly maintaining balances and ledger data behind the scenes.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Rewards, Budget, and Ask AI</div>
+              <h2>Rewards, budget, and Ask AI</h2>
+              <p>How Catalyst helps with card choice, faster setup, and better follow-up guidance.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="best card merchant category rewards use before pay shopping store maxrewards cardpointers">
+                <summary>
+                  <span class="faq-question">Can Catalyst Cash help me choose the best card before I pay?</span>
+                  <span class="faq-summary-tag">Rewards</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. The Rewards tab ranks the best card for a merchant or category, compares the winner against your backup card, and can show dollar estimates once you enter a purchase amount.</p>
+                  <p>That makes it useful both for everyday category choices and for one specific purchase when you want the best answer right before you tap to pay.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="mall nearby multiple locations geo location stores merchant chooser shopping center plaza">
+                <summary>
+                  <span class="faq-question">What if several stores are near me, like inside a mall or shopping center?</span>
+                  <span class="faq-summary-tag">Nearby</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Catalyst does not assume there is only one nearby merchant. If several candidates are close together, it can show a short list so you choose the exact storefront before the rewards ranking runs.</p>
+                  <p>That matters because “I am near the mall” is not the same thing as “I am about to spend at this one specific merchant.”</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="budget blank setup lines categories recurring bills seed starter">
+                <summary>
+                  <span class="faq-question">Does the budget start blank?</span>
+                  <span class="faq-summary-tag">Budget</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. Catalyst can seed starter budget lines from recurring bills and audit context so you do not have to build the first version from scratch.</p>
+                  <p>It also avoids overwriting matching lines you already created, which matters if you have already started shaping the budget yourself.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="rewards budget ask ai" data-keywords="ask ai feedback helpful not helpful improve answer local save telemetry privacy">
+                <summary>
+                  <span class="faq-question">What does Ask AI feedback actually do?</span>
+                  <span class="faq-summary-tag">Ask AI</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Helpful and needs-work feedback is not just a dead-end thumbs vote. It stays on-device and helps Catalyst adjust future replies toward the style you prefer, such as tighter answers or clearer math.</p>
+                  <p>Needs-work can also trigger an improved answer right away, without turning your private chat history into product telemetry.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Privacy and Backup</div>
+              <h2>Privacy and backup</h2>
+              <p>Where data lives, what leaves the device, and how recovery works.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="where is my data stored local first on device server cloud privacy">
+                <summary>
+                  <span class="faq-question">Where does my data live?</span>
+                  <span class="faq-summary-tag">Storage</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Your core financial record stays local-first on your device. That includes the day-to-day working data you use to run the audit and manage the app.</p>
+                  <p>AI requests are scrubbed and routed through the Catalyst backend, and the operational privacy boundary is explained in more detail on the <a href="/privacy.html">Privacy Policy</a> and <a href="/security.html">Security</a> pages.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="plaid tokens credentials password phone secure storage keychain">
+                <summary>
+                  <span class="faq-question">Are Plaid credentials or access tokens stored on my phone?</span>
+                  <span class="faq-summary-tag">Security</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. The app does not keep Plaid access tokens on-device. It keeps local connection metadata and account state needed for the user experience, while the sensitive token boundary stays off the phone.</p>
+                  <p>Manual backups also exclude passcodes, device identifiers, subscription state, and similar secrets.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="backup restore recover export encrypted icloud portability">
+                <summary>
+                  <span class="faq-question">How do backup and restore work?</span>
+                  <span class="faq-summary-tag">Recovery</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Catalyst Cash supports encrypted backup and restore so your finance record is portable without turning the whole product into a cloud-first database. Manual backups intentionally omit sensitive keys that should not be restored from export files.</p>
+                  <p>The goal is resilience: keep the user's working record recoverable while maintaining tighter security boundaries than a typical finance dashboard clone.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="icloud backup export recovery vault household cloud difference best option">
+                <summary>
+                  <span class="faq-question">Which recovery option should most people actually use?</span>
+                  <span class="faq-summary-tag">Recovery</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>For most iPhone users, encrypted iCloud backup is the easiest main recovery path. Encrypted export is the portable option when you want a file you control directly. Recovery Vault is the more advanced path for off-device encrypted recovery.</p>
+                  <p>Household Cloud is for shared encrypted sync, not the default answer for personal backup.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="privacy backup" data-keywords="cloud account required local only accountless privacy first">
+                <summary>
+                  <span class="faq-question">Can I use the app without making a cloud-first account my source of truth?</span>
+                  <span class="faq-summary-tag">Control</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. The product is designed so your core working record does not depend on a server-side finance database first. Network features exist when you use them, but the app's core posture is still local-first.</p>
+                  <p>That means you can use manual entry, optional Plaid, security controls, and encrypted backups without restructuring your whole financial life around a cloud dashboard.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+
+          <section class="faq-category" data-faq-section>
+            <div class="section-head faq-category-head">
+              <div class="micro-label">Plans and Workflow</div>
+              <h2>Plans and workflow</h2>
+              <p>What Free includes, what Pro changes, and how often to use the app.</p>
+            </div>
+
+            <div class="faq-accordion">
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="what does pro unlock pricing limits premium ledger archive models audits chats plaid institutions">
+                <summary>
+                  <span class="faq-question">What does Pro unlock?</span>
+                  <span class="faq-summary-tag">Pro</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Pro expands usage and depth: 20 audits per month, 30 AskAI chats per day, up to 8 Plaid institutions, quieter balance and ledger upkeep, the full audit archive, the full searchable ledger with export, and the premium AI models.</p>
+                  <p>Available at $12.99/month, $109.99/year, or $199.99 for lifetime access.</p>
+                  <p>The core workflow stays the same. Pro mostly removes constraints once the weekly rhythm is already working for you.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="does pro change math calculations scoring free versus paid">
+                <summary>
+                  <span class="faq-question">Does Pro change the financial math or just the limits?</span>
+                  <span class="faq-summary-tag">Math</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>The core math does not change. Pro changes usage limits, depth, model access, history depth, and the broader ledger workflow.</p>
+                  <p>That split matters because the point of upgrading is more room and better tooling, not a paid version of basic arithmetic.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="how often run audit weekly paycheck big change cadence">
+                <summary>
+                  <span class="faq-question">How often should I run an audit?</span>
+                  <span class="faq-summary-tag">Cadence</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Once a week is enough for most people. Run another one after a paycheck, a large purchase, a new bill, or any meaningful change in your balances.</p>
+                  <p>The app is meant to be a recurring operating rhythm, not a tool you only open when you are already stressed.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="demo mode safe overwrite my data sample scenario restore relaunch">
+                <summary>
+                  <span class="faq-question">Is demo mode safe to use if I already have my real data in the app?</span>
+                  <span class="faq-summary-tag">Demo</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. Demo mode is designed to snapshot your real data, show sample households, then restore your real state when you exit demo mode.</p>
+                  <p>It also clears on a full relaunch of the app, so the sample state does not keep masquerading as your real finances after you close and reopen the app.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="lifetime plan one time purchase permanent forever buy once non recurring">
+                <summary>
+                  <span class="faq-question">Is there a lifetime plan?</span>
+                  <span class="faq-summary-tag">Lifetime</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Yes. A one-time payment of $199.99 gives you permanent Pro access with no subscription, no renewals, and no recurring charges.</p>
+                  <p>It pays for itself in under 16 months compared with the monthly plan.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="referral program refer friend free month invite code share bonus">
+                <summary>
+                  <span class="faq-question">How does the referral program work?</span>
+                  <span class="faq-summary-tag">Referral</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>Open Settings in the app and find your unique referral code (CC-XXXXXX format). Share it with a friend. When they redeem your code, you both get one free month of Pro.</p>
+                  <p>You can earn up to 12 bonus months (one full year) through referrals. The referral link format is catalystcash.app/ref/YOUR-CODE.</p>
+                </div>
+              </details>
+
+              <details class="faq-item" data-faq-item data-category="plans workflow" data-keywords="financial advice legal tax investment fiduciary disclaimer">
+                <summary>
+                  <span class="faq-question">Is the output financial advice?</span>
+                  <span class="faq-summary-tag">Legal</span>
+                  <span class="faq-toggle" aria-hidden="true">+</span>
+                </summary>
+                <div class="faq-answer">
+                  <p>No. Catalyst Cash provides educational analysis and decision support, not licensed tax, legal, investment, or financial advice.</p>
+                  <p>The app is there to help you think more clearly and act more intentionally, while the responsibility for your decisions remains yours.</p>
+                </div>
+              </details>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="section" style="padding-top: 6px;">
+        <div class="final-cta">
+          <div>
+            <div class="micro-label">Next Step</div>
+            <h2>Ready to test it?</h2>
+            <p>
+              The fastest proof is still one real weekly check-in with current numbers.
+            </p>
+          </div>
+          <div class="button-stack">
+            <a href="https://testflight.apple.com/join/3rpWQq49" class="button-primary">Join TestFlight</a>
+            <a href="/guide.html" class="button-secondary">Read the Guide</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brandline">
+            <img src="/icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="lazy" />
+            Catalyst Cash
+          </div>
+          <p>Your weekly money audit for clear next moves, not more dashboard wallpaper.</p>
+        </div>
+
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="/">Home</a>
+            <a href="/compare.html">Compare</a>
+            <a href="/guide.html">Guide</a>
+            <a href="/faq.html">FAQ</a>
+          </div>
+          <div class="footer-col">
+            <h4>Trust</h4>
+            <a href="/security.html">Security</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
+          <div class="footer-col">
+            <h4>Support</h4>
+            <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+            <a href="https://testflight.apple.com/join/3rpWQq49">Join TestFlight</a>
+          </div>
+        </div>
+
+        <div class="disclaimer">
+          Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment,
+          or financial advice. App names and trademarks belong to their respective owners and do not imply endorsement.
+          Copyright 2026 Catalyst Cash. All rights reserved.
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/main.js?v=3.6"></script>
+</body>
+
+</html>

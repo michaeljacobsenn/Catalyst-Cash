@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#07111d" />
+  <title>Catalyst Cash Privacy Policy</title>
+  <meta name="description"
+    content="Learn how Catalyst Cash handles your data with local-first storage, scrubbed AI requests, secure storage, and encrypted backup options." />
+  <meta property="og:title" content="Catalyst Cash Privacy Policy" />
+  <meta property="og:description"
+    content="Catalyst Cash is designed around local-first financial data, scrubbed AI requests, and tight backup and storage controls." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://catalystcash.app/privacy.html" />
+  <meta property="og:image" content="https://catalystcash.app/icon-512.png" />
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap"
+    rel="stylesheet" />
+  <meta name="robots" content="index, follow" />
+  <link rel="stylesheet" href="/style.css?v=3.8" />
+</head>
+
+<body>
+  <a href="#main-content" class="skip-link"
+    style="position:absolute;top:-100%;left:16px;padding:12px 20px;background:var(--green);color:#07111d;font-weight:700;border-radius:8px;z-index:200;font-size:14px;transition:top 0.2s;"
+    onfocus="this.style.top='12px'" onblur="this.style.top='-100%'">Skip to content</a>
+  <div class="accent-line"></div>
+  <div id="mobile-overlay" class="mobile-overlay"></div>
+
+  <div class="page">
+    <nav role="navigation" aria-label="Main navigation">
+      <div class="nav-inner">
+        <a href="/" class="brand">
+          <img src="icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="eager" />
+          Catalyst Cash
+        </a>
+        <button class="hamburger" id="hamburger-btn" aria-label="Toggle navigation menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a href="/">Home</a>
+          <a href="/guide.html">Guide</a>
+          <a href="/faq.html">FAQ</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="/terms.html">Terms</a>
+          <a href="/compare.html">Compare</a>
+          <a href="mailto:support@catalystcash.app">Support</a>
+          <a href="https://testflight.apple.com/join/3rpWQq49" class="nav-cta">Join TestFlight</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="shell legal-content" id="main-content">
+      <div class="header-wrapper animate-fade-up"
+        style="height: auto; margin-top: 40px; margin-bottom: 40px; text-align: left;">
+        <div class="label-pill" style="margin: 0 0 20px 0;">Privacy policy</div>
+        <h1>Your core financial data stays close to you.</h1>
+        <p class="subtitle" style="text-align: left; max-width: 800px; margin-bottom: 24px;">
+          Catalyst Cash is built around local-first storage. The app keeps your core financial records on your device.
+          When you use AI features, the app sends scrubbed prompts through the Catalyst Cash backend proxy to
+          the selected model provider. Your raw financial payloads are not stored on our servers. The backend
+          logs a short scrubbed excerpt of the AI response (up to 600 characters) for service reliability;
+          this fragment never contains account numbers, balances, or other raw financial data.
+        </p>
+        <div class="meta">Effective date: 2026-03-05 | Last updated: 2026-04-23</div>
+      </div>
+
+      <section class="section">
+
+        <div class="summary-grid animate-fade-up delay-1">
+          <div class="summary-card">
+            <span>Stored locally</span>
+            <h2>Accounts, debts, renewals, history</h2>
+            <p>Your balances, debts, budgets, settings, and audit history live on-device by default.</p>
+          </div>
+          <div class="summary-card">
+            <span>Sent only when used</span>
+            <h2>Scrubbed AI, Plaid, and rewards requests</h2>
+            <p>AI requests, Plaid-linked account sync, and location-based rewards helpers only run when you choose to use those features.</p>
+          </div>
+          <div class="summary-card">
+            <span>Excluded from backup</span>
+            <h2>Secrets stay out of manual exports</h2>
+            <p>Passcodes, API keys, device IDs, and subscription state are excluded from manual backups.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="micro-label">What We Handle</div>
+          <h2>What data exists, where it lives, and why.</h2>
+        </div>
+
+        <div class="policy-grid animate-fade-up delay-2">
+          <div class="policy-card">
+            <span>1</span>
+            <h2>Information stored on your device</h2>
+            <ul>
+              <li>Manually entered financial data such as balances, debts, card metadata, renewals, goals, and notes.
+              </li>
+              <li>Audit results, dashboard history, settings, and local reminders.</li>
+              <li>Optional chat history, unless privacy mode is enabled.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>2</span>
+            <h2>Information sent when you use AI features</h2>
+            <ul>
+              <li>When you run an audit or AskAI chat, the app sends a scrubbed and minimized request through the Catalyst Cash
+                backend proxy.</li>
+              <li>The proxy forwards the request to the selected production AI provider, currently OpenAI.</li>
+              <li>Your raw financial payload is not stored on our servers. A short scrubbed excerpt of the AI
+                response (up to 600 characters, no account numbers or balances) is logged for service reliability
+                analysis and automatically purged after 30 days on a rolling basis.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>3</span>
+            <h2>Optional Plaid connection</h2>
+            <ul>
+              <li>If you connect accounts with Plaid, your bank credentials are entered into Plaid's interface, not
+                ours.</li>
+              <li>Plaid may provide balances and transaction data to the app so your local records stay more current.
+              </li>
+              <li>Plaid's data handling is governed by <a href="https://plaid.com/legal/#end-user-privacy-policy"
+                  target="_blank" rel="noreferrer">Plaid's End User Privacy Policy</a>.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>4</span>
+            <h2>Optional location-based rewards</h2>
+            <ul>
+              <li>If you allow location access, Catalyst Cash can use your approximate nearby context to help identify merchants and suggest the strongest card before you pay.</li>
+              <li>Location access is optional, permission-based, and used for app functionality rather than advertising or tracking.</li>
+              <li>You can disable location access at any time in iOS Settings.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>5</span>
+            <h2>Purchases and entitlement checks</h2>
+            <ul>
+              <li>Subscriptions are handled through Apple and RevenueCat.</li>
+              <li>For entitlement verification, the app may send a RevenueCat app user identifier to the backend.</li>
+              <li>This verification path does not require sending your financial dataset.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>6</span>
+            <h2>Chat retention and privacy mode</h2>
+            <ul>
+              <li>Chat messages are stored locally and auto-expire after 24 hours.</li>
+              <li>Sensitive patterns are scrubbed before any local chat persistence.</li>
+              <li>If privacy mode is enabled, chat content is not written to disk.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>7</span>
+            <h2>Backups, encryption, and secure storage</h2>
+            <ul>
+              <li>Passcodes and similar secrets are stored with native secure storage when available.</li>
+              <li>Optional backups use encryption, and manual exports intentionally omit sensitive keys.</li>
+              <li>Factory reset clears local financial data and security-sensitive local state.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>8</span>
+            <h2>Operational telemetry</h2>
+            <ul>
+              <li>In production, Catalyst Cash may send scrubbed funnel milestones, support-risk events, and error diagnostics to help keep the app reliable.</li>
+              <li>Telemetry is designed to avoid raw financial details, account numbers, contact details, API keys, and access tokens.</li>
+              <li>These events may include a device identifier, timestamp, app action label, sanitized context, stack trace, or user-agent details.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>9</span>
+            <h2>What we do not do</h2>
+            <ul>
+              <li>We do not sell your personal data.</li>
+              <li>We do not use your financial data for advertising profiles.</li>
+              <li>We do not store raw financial payloads on our servers. Only a short scrubbed AI response
+                excerpt is logged for reliability; it is purged after 30 days on a rolling basis.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>10</span>
+            <h2>Your choices</h2>
+            <ul>
+              <li>Use manual entry instead of Plaid.</li>
+              <li>Clear chat history, audit history, or all app data at any time.</li>
+              <li>Enable privacy mode and use a passcode or Face ID for tighter local protection.</li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>11</span>
+            <h2>Security measures</h2>
+            <ul>
+              <li>Native secure storage is used for passcodes and comparable sensitive local values where available.
+              </li>
+              <li>API requests use a secured backend proxy instead of exposing provider keys in the app.</li>
+              <li>Manual backup import rejects known sensitive keys that should never be restored from export files.
+              </li>
+            </ul>
+          </div>
+          <div class="policy-card">
+            <span>12</span>
+            <h2>Policy changes and contact</h2>
+            <ul>
+              <li>We may update this policy as the product evolves.</li>
+              <li>Material changes will be reflected with a new effective date on this page.</li>
+              <li>Questions can be sent to <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section animate-fade-up delay-3">
+        <div class="cta-band">
+          <div>
+            <div class="micro-label">Related Pages</div>
+            <h2>Read the full product guide and the terms too.</h2>
+            <p>
+              Privacy only makes sense when it matches the product and the legal language. The guide and terms pages are
+              kept in sync with the same shipping behavior.
+            </p>
+          </div>
+          <div class="actions">
+            <a href="guide.html" class="button-secondary">Read the Guide</a>
+            <a href="terms.html" class="button-primary">View Terms</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-brandline">
+            <img src="/icon-192.png" alt="Catalyst Cash Logo" width="32" height="32" loading="lazy" />
+            Catalyst Cash
+          </div>
+          <p>Your weekly money audit for clear next moves, not more dashboard wallpaper.</p>
+        </div>
+
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="/#difference">What It Does</a>
+            <a href="/#workflow">How It Works</a>
+            <a href="/#pricing">Pricing</a>
+          </div>
+          <div class="footer-col">
+            <h4>Resources</h4>
+            <a href="/guide.html">Guide</a>
+            <a href="/faq.html">FAQ</a>
+            <a href="/security.html">Security</a>
+            <a href="/privacy.html">Privacy Policy</a>
+            <a href="/terms.html">Terms of Service</a>
+          </div>
+          <div class="footer-col">
+            <h4>Support</h4>
+            <a href="mailto:support@catalystcash.app">support@catalystcash.app</a>
+            <a href="https://testflight.apple.com/join/3rpWQq49">Join TestFlight</a>
+          </div>
+        </div>
+
+        <div class="disclaimer">
+          Catalyst Cash provides AI-generated educational information only and is not tax, legal, investment,
+          or financial advice. Copyright 2026 Catalyst Cash. All rights reserved.
+        </div>
+      </div>
+    </footer>
+  </div>
+  <script src="/main.js"></script>
+</body>
+
+</html>
